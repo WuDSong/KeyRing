@@ -185,7 +185,7 @@ fun UnlockScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
+            painter = painterResource(R.drawable.app_logo),
             contentDescription = null,
             modifier = Modifier.size(88.dp)
         )

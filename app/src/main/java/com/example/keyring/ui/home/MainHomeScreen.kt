@@ -70,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
@@ -81,6 +82,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -111,6 +114,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -844,21 +848,23 @@ private fun DrawerStatsCard(
 
 @Composable
 private fun DrawerHeaderBanner(modifier: Modifier = Modifier) {
-    val painter = painterResource(R.drawable.menu_main_img)
-    val intrinsicSize = painter.intrinsicSize
-    val ratio =
-        if (intrinsicSize.width > 0f && intrinsicSize.height > 0f) {
-            intrinsicSize.width / intrinsicSize.height
-        } else {
-            16f / 9f
-        }
-    Image(
-        painter = painter,
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val widthDp = LocalConfiguration.current.screenWidthDp
+    val widthPx = with(density) { widthDp.dp.roundToPx() }
+    val ratio = 1920f / 1280f
+    val heightPx = (widthPx / ratio).roundToInt().coerceAtLeast(1)
+
+    AsyncImage(
+        model = ImageRequest.Builder(context)
+            .data(R.drawable.menu_main_img)
+            .size(widthPx, heightPx)
+            .build(),
         contentDescription = null,
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(ratio),
-        contentScale = ContentScale.FillWidth
+        contentScale = ContentScale.Crop
     )
 }
 
