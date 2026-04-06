@@ -3,6 +3,11 @@
 > 一个本地优先、以隐私与实用为核心的 Android 密码管理器。  
 > A local-first Android password manager focused on privacy and practical usability.
 
+## 快速导航 / Quick Navigation
+
+- [中文版](#中文版)
+- [English](#english)
+
 ---
 
 ## 中文版
@@ -40,6 +45,11 @@
 - **备份能力**
   - 支持导出数据
   - 支持导入数据
+- **局域网同步**
+  - 同一 Wi-Fi 下设备间点对点加密同步
+  - 支持双向数据合并（拉取并推送）
+  - 基于配对码与信任密钥的安全传输
+  - 可配置重复条目合并策略
 - **关于页信息完善**
   - 开源依赖、图片素材引用、免责声明、版权声明
 - **多语言**
@@ -61,6 +71,8 @@
 - AndroidX Security Crypto
 - Biometric
 - Coil
+- Ktor (网络通信框架，用于局域网同步)
+- Kotlinx Serialization (数据序列化，用于同步传输)
 
 ### 构建与运行
 
@@ -132,6 +144,11 @@ The project focuses on **offline usability, privacy, and clean user experience**
 - **Backup**
   - Export data
   - Import data
+- **LAN sync**
+  - Peer-to-peer encrypted sync between devices on the same Wi-Fi
+  - Bidirectional data merging (pull then push)
+  - Secure transmission with pairing code and trust key
+  - Configurable duplicate entry merge policy
 - **About page**
   - Open-source libraries, image attributions, disclaimers, copyright notes
 - **Language options**
