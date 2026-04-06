@@ -6,6 +6,7 @@ object HomeRoutes {
     const val ADD = "add"
     const val SETTINGS = "settings"
     const val LANGUAGE = "language"
+    const val LAN_SYNC = "lan_sync"
     const val ABOUT = "about"
     const val DETAIL = "detail/{entryId}"
     const val EDIT = "edit/{entryId}"

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [PasswordEntry::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -72,6 +72,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE password_entries ADD COLUMN uuid TEXT NOT NULL DEFAULT ''"
+                )
+                val cursor = db.query("SELECT id FROM password_entries")
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val stmt = db.compileStatement(
+                        "UPDATE password_entries SET uuid = ? WHERE id = ?"
+                    )
+                    stmt.bindString(1, java.util.UUID.randomUUID().toString())
+                    stmt.bindLong(2, id)
+                    stmt.executeUpdateDelete()
+                    stmt.close()
+                }
+                cursor.close()
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -81,7 +101,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "mypasswords.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build().also { instance = it }
             }
         }

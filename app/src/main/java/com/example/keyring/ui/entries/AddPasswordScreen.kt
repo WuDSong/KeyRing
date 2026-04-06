@@ -62,6 +62,7 @@ import com.example.keyring.util.ImageStorage
 import com.example.keyring.util.PasswordGenerator
 import com.example.keyring.util.UrlValidation
 import com.example.keyring.util.WebsiteFaviconFetcher
+import java.util.UUID
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -127,6 +128,7 @@ fun AddPasswordScreen(
                 if (entryId == null) {
                     val now = System.currentTimeMillis()
                     val entry = PasswordEntry(
+                        uuid = UUID.randomUUID().toString(),
                         title = title.trim(),
                         accountName = accountName.trim(),
                         username = username.trim(),

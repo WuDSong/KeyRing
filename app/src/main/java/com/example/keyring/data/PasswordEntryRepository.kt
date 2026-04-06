@@ -4,6 +4,9 @@ import android.content.Context
 import com.example.keyring.data.local.PasswordEntry
 import com.example.keyring.data.local.PasswordEntryDao
 import com.example.keyring.data.local.allAttachmentPaths
+import com.example.keyring.sync.MergeEngine
+import com.example.keyring.sync.MergeStats
+import com.example.keyring.sync.SyncArchive
 import com.example.keyring.util.ImageStorage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -36,6 +39,14 @@ class PasswordEntryRepository(
 
     suspend fun getAllEntries(): List<PasswordEntry> =
         sortEntries(dao.getAllEntriesSync(), appPreferences.getListSortOrder())
+
+    /** 不做排序，供同步合并等场景使用。 */
+    suspend fun getAllEntriesUnsorted(): List<PasswordEntry> = dao.getAllEntriesSync()
+
+    suspend fun mergeSyncArchive(
+        parsed: List<SyncArchive.ParsedEntry>,
+        policy: AppPreferences.DuplicatePolicy
+    ): MergeStats = MergeEngine.merge(this, parsed, policy)
 
     fun observeEntryCount(): Flow<Int> = dao.observeEntryCount()
 

@@ -2,15 +2,21 @@ package com.example.keyring.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 import kotlin.math.abs
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.util.UUID
 
 class AppPreferences(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun getMode(): ThemeMode {
         val ordinal = prefs.getInt(KEY_MODE, ThemeMode.SYSTEM.ordinal)
@@ -164,6 +170,10 @@ class AppPreferences(context: Context) {
         private const val PREFS_NAME = "app_ui_prefs"
         private const val KEY_MODE = "theme_mode"
         private const val KEY_APP_LANGUAGE = "app_language"
+        private const val KEY_DEVICE_ID = "sync_device_id"
+        private const val KEY_DEVICE_NAME = "sync_device_name"
+        private const val KEY_TRUSTED_DEVICES = "sync_trusted_devices_json"
+        private const val KEY_DUP_POLICY = "sync_dup_policy"
         private const val KEY_LIST_SORT = "list_sort_order"
         private const val KEY_AUTO_LOCK = "auto_lock_enabled"
         private const val KEY_BIOMETRIC_UNLOCK = "biometric_unlock_enabled"
@@ -179,5 +189,70 @@ class AppPreferences(context: Context) {
         const val LANG_SYSTEM = "system"
         const val LANG_ZH_CN = "zh-CN"
         const val LANG_EN = "en"
+    }
+
+    enum class DuplicatePolicy { SKIP, OVERWRITE_NEWER, KEEP_BOTH }
+
+    fun getDuplicatePolicy(): DuplicatePolicy {
+        val name = prefs.getString(KEY_DUP_POLICY, DuplicatePolicy.OVERWRITE_NEWER.name)
+        return runCatching { DuplicatePolicy.valueOf(name ?: "") }.getOrDefault(DuplicatePolicy.OVERWRITE_NEWER)
+    }
+
+    fun setDuplicatePolicy(policy: DuplicatePolicy) {
+        prefs.edit().putString(KEY_DUP_POLICY, policy.name).apply()
+    }
+
+    fun observeDuplicatePolicy(): Flow<DuplicatePolicy> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_DUP_POLICY) trySend(getDuplicatePolicy())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getDuplicatePolicy())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    fun getDeviceId(): String {
+        val existing = prefs.getString(KEY_DEVICE_ID, null)
+        if (!existing.isNullOrBlank()) return existing
+        val id = UUID.randomUUID().toString()
+        prefs.edit().putString(KEY_DEVICE_ID, id).apply()
+        return id
+    }
+
+    fun getDeviceName(): String = prefs.getString(KEY_DEVICE_NAME, android.os.Build.MODEL) ?: android.os.Build.MODEL
+
+    fun setDeviceName(name: String) {
+        prefs.edit().putString(KEY_DEVICE_NAME, name.trim().ifBlank { android.os.Build.MODEL }).apply()
+    }
+
+    @kotlinx.serialization.Serializable
+    data class TrustedDevice(
+        val deviceId: String,
+        val name: String,
+        /** 32 bytes AES key, base64 */
+        val sharedKeyB64: String,
+        val pairedAt: Long
+    )
+
+    fun getTrustedDevices(): List<TrustedDevice> {
+        val raw = prefs.getString(KEY_TRUSTED_DEVICES, null) ?: return emptyList()
+        return runCatching { json.decodeFromString<List<TrustedDevice>>(raw) }.getOrDefault(emptyList())
+    }
+
+    fun upsertTrustedDevice(device: TrustedDevice) {
+        val list = getTrustedDevices().toMutableList()
+        val idx = list.indexOfFirst { it.deviceId == device.deviceId }
+        if (idx >= 0) list[idx] = device else list.add(device)
+        prefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(list)).apply()
+    }
+
+    fun removeTrustedDevice(deviceId: String) {
+        val next = getTrustedDevices().filterNot { it.deviceId == deviceId }
+        prefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(next)).apply()
+    }
+
+    fun trustedDeviceKey(deviceId: String): ByteArray? {
+        val td = getTrustedDevices().firstOrNull { it.deviceId == deviceId } ?: return null
+        return runCatching { Base64.decode(td.sharedKeyB64, Base64.NO_WRAP) }.getOrNull()
     }
 }

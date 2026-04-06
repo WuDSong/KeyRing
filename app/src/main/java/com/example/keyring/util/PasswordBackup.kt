@@ -39,6 +39,7 @@ object PasswordBackup {
 
                 for (entry in entries) {
                     val o = JSONObject()
+                    o.put("uuid", entry.uuid)
                     o.put("title", entry.title)
                     o.put("accountName", entry.accountName)
                     o.put("username", entry.username)
@@ -223,6 +224,7 @@ object PasswordBackup {
 
         return PasswordEntry(
             id = 0,
+            uuid = o.optString("uuid", "").ifBlank { UUID.randomUUID().toString() },
             title = o.optString("title", ""),
             accountName = o.optString("accountName", ""),
             username = o.optString("username", ""),

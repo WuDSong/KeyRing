@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -292,6 +293,22 @@ fun MainHomeScreen(
                     NavigationDrawerItem(
                         icon = {
                             Icon(
+                                imageVector = Icons.Filled.Sync,
+                                contentDescription = null
+                            )
+                        },
+                        label = { Text(stringResource(R.string.drawer_lan_sync)) },
+                        selected = false,
+                        onClick = {
+                            scope.launch {
+                                drawerState.close()
+                                navController.navigate(HomeRoutes.LAN_SYNC)
+                            }
+                        }
+                    )
+                    NavigationDrawerItem(
+                        icon = {
+                            Icon(
                                 imageVector = Icons.Filled.Feedback,
                                 contentDescription = null
                             )
@@ -397,6 +414,7 @@ private fun MainScaffoldContent(
     val isList = route == HomeRoutes.LIST
     val isSearch = route == HomeRoutes.SEARCH
     val isSettings = route == HomeRoutes.SETTINGS
+    val isLanSync = route == HomeRoutes.LAN_SYNC
     val isLanguage = route == HomeRoutes.LANGUAGE
     val isAbout = route == HomeRoutes.ABOUT
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -478,6 +496,7 @@ private fun MainScaffoldContent(
                                 isEdit -> Text(stringResource(R.string.edit_entry_title))
                                 isDetail -> Text(stringResource(R.string.detail_title))
                                 isSettings -> Text(stringResource(R.string.settings_title))
+                                isLanSync -> Text(stringResource(R.string.sync_screen_title))
                                 isLanguage -> Text(stringResource(R.string.language_title))
                                 isAbout -> Text(stringResource(R.string.about_screen_title))
                                 isList -> {
@@ -519,7 +538,7 @@ private fun MainScaffoldContent(
                         },
                         navigationIcon = {
                             when {
-                                isAdd || isDetail || isEdit || isSettings || isLanguage || isAbout -> {
+                                isAdd || isDetail || isEdit || isSettings || isLanSync || isLanguage || isAbout -> {
                                     IconButton(onClick = { navController.popBackStack() }) {
                                         Icon(
                                             imageVector = Icons.Filled.ArrowBack,
@@ -674,6 +693,13 @@ private fun MainScaffoldContent(
                     }
                     composable(HomeRoutes.LANGUAGE) {
                         LanguageScreen(
+                            appPreferences = appPreferences,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    composable(HomeRoutes.LAN_SYNC) {
+                        SyncScreen(
+                            repository = entryRepository,
                             appPreferences = appPreferences,
                             modifier = Modifier.fillMaxSize()
                         )

@@ -152,6 +152,18 @@
 
 ---
 
+## 阶段十三：局域网点对点同步（配对码 + 加密 + NSD）
+
+- **数据**：`PasswordEntry` 增加 **`uuid`** 字段（Room 迁移 4→5，历史数据补齐随机 UUID）；备份 JSON 同步写入 `uuid`。
+- **传输与安全**：配对码 + 双方盐经 **PBKDF2** 派生会话密钥，再用 **HKDF（字典序 deviceId）** 派生长期信任密钥；`/sync/pull`、`/sync/push` 载荷经 **AES-GCM** 加密。
+- **合并**：`MergeEngine` — **UUID 优先**，否则 **标题/账户/用户名/URL 指纹**；策略：**跳过 / 较新覆盖（默认）/ 保留两份（标题加副本）**。
+- **服务**：嵌入式 **Ktor CIO** HTTP 服务（`SyncServer`），`SyncClient` 拉取/推送 ZIP 归档（`SyncArchive`）。
+- **发现**：**NSD** 广播/发现 `_keyring._tcp.`，`SyncScreen` 展示可点击填入 IP。
+- **界面**：抽屉 **「局域网同步」**；设置中 **同步重复策略**；关于页补充说明。
+- **构建**：R8 对 Ktor 缺失类补充 `-dontwarn`（`java.lang.management.*`、`slf4j`）。
+
+---
+
 ## 技术栈摘要
 
 | 类别 | 选型 |
@@ -162,6 +174,7 @@
 | 安全 | EncryptedSharedPreferences，密码哈希 SHA-256 |
 | 图片 | Coil，系统 Photo Picker |
 | 语言 | Kotlin |
+| 局域网同步 | Ktor Server/Client CIO，Kotlinx Serialization，AES-GCM，NSD |
 
 ---
 

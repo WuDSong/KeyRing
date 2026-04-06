@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,6 +86,9 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(
             initialValue = appPreferences.getNetworkForFaviconEnabled()
         )
+    val dupPolicy by appPreferences.observeDuplicatePolicy().collectAsStateWithLifecycle(
+        initialValue = appPreferences.getDuplicatePolicy()
+    )
 
     val lengthOptions = remember {
         listOf(8, 12, 16, 20, 24, 32)
@@ -225,6 +229,42 @@ fun SettingsScreen(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
+                    )
+                }
+            }
+        }
+        item {
+            SettingsSectionHeader(text = stringResource(R.string.settings_section_sync))
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.settings_sync_dup_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    SettingsDropdownRow(
+                        label = stringResource(R.string.settings_sync_dup_policy_title),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Sync,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        options = AppPreferences.DuplicatePolicy.entries.toList(),
+                        selected = dupPolicy,
+                        optionLabel = { p ->
+                            when (p) {
+                                AppPreferences.DuplicatePolicy.SKIP ->
+                                    stringResource(R.string.settings_sync_dup_skip)
+                                AppPreferences.DuplicatePolicy.OVERWRITE_NEWER ->
+                                    stringResource(R.string.settings_sync_dup_overwrite)
+                                AppPreferences.DuplicatePolicy.KEEP_BOTH ->
+                                    stringResource(R.string.settings_sync_dup_keep_both)
+                            }
+                        },
+                        onSelect = { appPreferences.setDuplicatePolicy(it) }
                     )
                 }
             }
