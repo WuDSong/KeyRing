@@ -51,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.activity.result.contract.ActivityResultContracts
 import coil.compose.AsyncImage
 import com.example.keyring.R
 import com.example.keyring.data.AppPreferences
@@ -201,8 +202,31 @@ fun AddPasswordScreen(
         }
     }
 
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val path = ImageStorage.copyFromUri(context, uri)
+        if (path != null) {
+            ImageStorage.deleteIfExists(avatarImagePath)
+            avatarImagePath = path
+        }
+    }
+
+    val multiFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<android.net.Uri> ->
+        val newPaths = uris.mapNotNull { ImageStorage.copyFromUri(context, it) }
+        if (newPaths.isNotEmpty()) {
+            attachmentPaths = attachmentPaths + newPaths
+        }
+    }
+
     val scroll = rememberScrollState()
     val urlInvalidMessage = stringResource(R.string.error_url_invalid)
+
+    var showAvatarPickerDialog by remember { mutableStateOf(false) }
+    var showAttachmentPickerDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -215,11 +239,39 @@ fun AddPasswordScreen(
             title = title,
             avatarImagePath = avatarImagePath,
             onEditAvatarClick = {
-                avatarPicker.launch(
-                    PickVisualMediaRequest(PickVisualMedia.ImageOnly)
-                )
+                showAvatarPickerDialog = true
             }
         )
+
+        if (showAvatarPickerDialog) {
+            AlertDialog(
+                onDismissRequest = { showAvatarPickerDialog = false },
+                title = { Text("选择图片来源") },
+                text = { Text("请选择从相册还是文件管理器选择图片") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAvatarPickerDialog = false
+                            avatarPicker.launch(
+                                PickVisualMediaRequest(PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    ) {
+                        Text("相册")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showAvatarPickerDialog = false
+                            filePicker.launch("image/*")
+                        }
+                    ) {
+                        Text("文件管理器")
+                    }
+                }
+            )
+        }
         OutlinedTextField(
             value = title,
             onValueChange = {
@@ -442,9 +494,7 @@ fun AddPasswordScreen(
         )
         FilledTonalButton(
             onClick = {
-                multiImagePicker.launch(
-                    PickVisualMediaRequest(PickVisualMedia.ImageOnly)
-                )
+                showAttachmentPickerDialog = true
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -460,6 +510,36 @@ fun AddPasswordScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.action_attach_image))
             }
+        }
+
+        if (showAttachmentPickerDialog) {
+            AlertDialog(
+                onDismissRequest = { showAttachmentPickerDialog = false },
+                title = { Text("选择图片来源") },
+                text = { Text("请选择从相册还是文件管理器选择图片") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAttachmentPickerDialog = false
+                            multiImagePicker.launch(
+                                PickVisualMediaRequest(PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    ) {
+                        Text("相册")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showAttachmentPickerDialog = false
+                            multiFilePicker.launch("image/*")
+                        }
+                    ) {
+                        Text("文件管理器")
+                    }
+                }
+            )
         }
 
         if (attachmentPaths.isNotEmpty()) {
