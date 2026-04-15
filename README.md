@@ -193,6 +193,7 @@ Use `gradlew.bat` on Windows.
 
 ## License
 
-当前仓库暂未附带开源许可证文件（`LICENSE`）。  
-请在对外发布前根据你的分发计划补充许可证条款。
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+See the [LICENSE](LICENSE) file for details.
 
