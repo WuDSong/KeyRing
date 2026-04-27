@@ -161,7 +161,7 @@
     <string name="search_empty_hint">输入关键词搜索标题、登录账户、用户名或描述</string>
     <string name="search_hint">搜索</string>
     <string name="search_no_results">未找到匹配项</string>
-    <string name="settings_auto_lock_summary">离开应用或熄屏后需重新输入密码</string>
+    <string name="settings_auto_lock_summary">熄屏后需重新输入密码</string>
     <string name="settings_auto_lock_title">自动锁定</string>
     <string name="settings_biometric_summary">使用指纹或面容验证后快速解锁（需本机已录入指纹或面容）</string>
     <string name="settings_biometric_title">生物识别解锁</string>

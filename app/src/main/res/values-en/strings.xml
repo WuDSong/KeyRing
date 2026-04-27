@@ -52,7 +52,7 @@
     <string name="settings_theme_on">On</string>
     <string name="settings_theme_follow_system">Follow System</string>
     <string name="settings_auto_lock_title">Auto Lock</string>
-    <string name="settings_auto_lock_summary">Require password after app leaves foreground or screen off</string>
+    <string name="settings_auto_lock_summary">Require password after screen off</string>
     <string name="settings_biometric_title">Biometric Unlock</string>
     <string name="settings_biometric_summary">Unlock quickly with fingerprint/face (requires enrolled biometric)</string>
     <string name="settings_network_favicon_title">Allow Network</string>

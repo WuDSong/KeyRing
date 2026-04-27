@@ -35,7 +35,6 @@ import com.example.keyring.util.wrapContextWithAppLanguage
 
 private const val PHASE_LOADING = 0
 private const val PHASE_SETUP = 1
-private const val PHASE_UNLOCK = 2
 private const val PHASE_MAIN = 3
 
 class MainActivity : FragmentActivity() {
@@ -86,10 +85,17 @@ fun MyPasswordsApp(
     onThemeModeChange: (ThemeMode) -> Unit
 ) {
     var phase by rememberSaveable { mutableStateOf(PHASE_LOADING) }
+    var locked by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (phase == PHASE_LOADING) {
-            phase = if (passwordStore.isPasswordSet()) PHASE_UNLOCK else PHASE_SETUP
+            if (passwordStore.isPasswordSet()) {
+                phase = PHASE_MAIN
+                locked = true
+            } else {
+                phase = PHASE_SETUP
+                locked = false
+            }
         }
     }
 
@@ -113,32 +119,40 @@ fun MyPasswordsApp(
             onSuccess = {
                 appPreferences.recordSuccessfulUnlockTimestamp()
                 phase = PHASE_MAIN
-            }
-        )
-        PHASE_UNLOCK -> UnlockScreen(
-            passwordStore = passwordStore,
-            appPreferences = appPreferences,
-            biometricVault = biometricVault,
-            onSuccess = {
-                appPreferences.recordSuccessfulUnlockTimestamp()
-                phase = PHASE_MAIN
+                locked = false
             }
         )
         PHASE_MAIN -> {
-            AutoLockEffect(
-                appPreferences = appPreferences,
-                onLock = { phase = PHASE_UNLOCK }
-            )
-            MainHomeScreen(
-                passwordStore = passwordStore,
-                entryRepository = entryRepository,
-                appPreferences = appPreferences,
-                biometricVault = biometricVault,
-                themeMode = themeMode,
-                onThemeModeChange = onThemeModeChange,
-                onRequireRelogin = { phase = PHASE_UNLOCK },
-                modifier = Modifier.fillMaxSize()
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                AutoLockEffect(
+                    appPreferences = appPreferences,
+                    onLock = {
+                        if (!locked) locked = true
+                    }
+                )
+                MainHomeScreen(
+                    passwordStore = passwordStore,
+                    entryRepository = entryRepository,
+                    appPreferences = appPreferences,
+                    biometricVault = biometricVault,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
+                    onRequireRelogin = { locked = true },
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (locked) {
+                    UnlockScreen(
+                        passwordStore = passwordStore,
+                        appPreferences = appPreferences,
+                        biometricVault = biometricVault,
+                        onSuccess = {
+                            appPreferences.recordSuccessfulUnlockTimestamp()
+                            locked = false
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         }
         else -> {
             Box(
