@@ -22,7 +22,7 @@ import java.util.zip.ZipOutputStream
 
 object PasswordBackup {
     private const val JSON_ENTRY = "mypasswords_backup.json"
-    private const val FORMAT_VERSION = 2
+    private const val FORMAT_VERSION = 3
     private const val IMG_PREFIX = "img/"
 
     suspend fun exportToZip(
@@ -46,6 +46,9 @@ object PasswordBackup {
                     o.put("password", entry.password)
                     o.put("url", entry.url)
                     o.put("description", entry.description)
+                    if (!entry.detailedDescription.isNullOrBlank()) {
+                        o.put("detailedDescription", entry.detailedDescription)
+                    }
                     o.put("tags", entry.tags)
                     o.put("createdAt", entry.createdAt)
                     o.put("updatedAt", entry.updatedAt)
@@ -231,6 +234,7 @@ object PasswordBackup {
             password = o.optString("password", ""),
             url = o.optString("url", ""),
             description = o.optString("description", ""),
+            detailedDescription = readNullableString(o, "detailedDescription"),
             tags = o.optString("tags", ""),
             imagePath = null,
             attachmentsJson = encodeAttachmentPathsJson(importedPaths),

@@ -147,7 +147,8 @@
     <string name="error_url_invalid">请输入有效的网站地址（需以 http:// 或 https:// 开头）</string>
     <string name="field_account_name">登录账户</string>
     <string name="field_confirm_password">确认密码</string>
-    <string name="field_description">描述</string>
+    <string name="field_description">简短描述</string>
+    <string name="field_detailed_description">详细描述</string>
     <string name="field_password">密码</string>
     <string name="field_tags_hint">多个标签请用逗号分隔（英文或中文逗号均可），例如：工作,社交</string>
     <string name="field_title">标题</string>

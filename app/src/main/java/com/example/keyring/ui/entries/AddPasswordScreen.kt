@@ -89,6 +89,7 @@ fun AddPasswordScreen(
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var detailedDescription by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
     var attachmentPaths by remember { mutableStateOf<List<String>>(emptyList()) }
     var avatarImagePath by remember { mutableStateOf<String?>(null) }
@@ -106,6 +107,7 @@ fun AddPasswordScreen(
         confirmPassword = e.password
         url = e.url
         description = e.description
+        detailedDescription = e.detailedDescription ?: ""
         tags = e.tags
         attachmentPaths = e.allAttachmentPaths()
         avatarImagePath = e.avatarImagePath
@@ -136,6 +138,7 @@ fun AddPasswordScreen(
                         password = password,
                         url = url.trim(),
                         description = description.trim(),
+                        detailedDescription = detailedDescription.trim().ifBlank { null },
                         tags = tags.trim(),
                         imagePath = null,
                         attachmentsJson = encodeAttachmentPathsJson(attachmentPaths),
@@ -162,6 +165,7 @@ fun AddPasswordScreen(
                             password = password,
                             url = url.trim(),
                             description = description.trim(),
+                            detailedDescription = detailedDescription.trim().ifBlank { null },
                             tags = tags.trim(),
                             imagePath = null,
                             attachmentsJson = encodeAttachmentPathsJson(attachmentPaths),
@@ -474,7 +478,14 @@ fun AddPasswordScreen(
             onValueChange = { description = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_description)) },
-            minLines = 3
+            minLines = 2
+        )
+        OutlinedTextField(
+            value = detailedDescription,
+            onValueChange = { detailedDescription = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.field_detailed_description)) },
+            minLines = 4
         )
 
         Spacer(modifier = Modifier.height(8.dp))

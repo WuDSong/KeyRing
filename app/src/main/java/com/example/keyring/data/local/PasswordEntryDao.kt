@@ -13,11 +13,12 @@ interface PasswordEntryDao {
 
     @Query(
         """
-        SELECT * FROM password_entries 
-        WHERE title LIKE '%' || :q || '%' 
+        SELECT * FROM password_entries
+        WHERE title LIKE '%' || :q || '%'
            OR accountName LIKE '%' || :q || '%'
            OR username LIKE '%' || :q || '%'
            OR description LIKE '%' || :q || '%'
+           OR detailedDescription LIKE '%' || :q || '%'
         """
     )
     fun searchEntriesLike(q: String): Flow<List<PasswordEntry>>

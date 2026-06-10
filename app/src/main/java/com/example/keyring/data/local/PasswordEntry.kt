@@ -16,7 +16,10 @@ data class PasswordEntry(
     val username: String,
     val password: String,
     val url: String,
+    /** 简短描述 */
     val description: String,
+    /** 详细描述（v6 新增） */
+    val detailedDescription: String? = null,
     val tags: String,
     /** Legacy column; data lives in [attachmentsJson]. Kept for Room schema. */
     val imagePath: String?,
