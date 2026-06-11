@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -130,6 +132,7 @@ private fun PasswordEntryDetailContent(
         Text(
             text = entry.title,
             style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -150,7 +153,7 @@ private fun PasswordEntryDetailContent(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = entry.detailedDescription,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -243,36 +246,36 @@ private fun DetailCopyableSection(
     if (value.isBlank()) return
 
     var passwordVisible by remember { mutableStateOf(false) }
+    val displayText =
+        if (isPasswordField && !passwordVisible) {
+            "\u2022".repeat(value.length)
+        } else {
+            value
+        }
 
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                val displayText =
-                    if (isPasswordField && !passwordVisible) {
-                        "\u2022".repeat(value.length)
-                    } else {
-                        value
-                    }
-                Text(
-                    text = displayText,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            // \u5de6\u4fa7\uff1a\u6807\u7b7e
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.widthIn(max = 80.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            // \u4e2d\u95f4\uff1a\u503c
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            // \u53f3\u4fa7\uff1a\u64cd\u4f5c\u6309\u94ae
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isPasswordField) {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
