@@ -3,9 +3,10 @@
 > 一个本地优先、以隐私与实用为核心的 Android 密码管理器。  
 > A local-first Android password manager focused on privacy and practical usability.
 
-<img src="screenshots/进入.jpg" style="zoom: 30%;"  /> <img src="screenshots/添加.jpg" style="zoom: 30%;" /> <img src="screenshots/查看.jpg" style="zoom: 30%;" /><img src="screenshots/局域网同步.jpg" style="zoom: 30%;" />
+**更多APP照片在screenshots里**
 
- <img src="screenshots/设置.jpg" style="zoom: 30%;" />
+<img src="screenshots/进入.jpg" style="zoom: 30%;"/> 
+
 
 ## 快速导航 / Quick Navigation
 
