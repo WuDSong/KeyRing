@@ -1,6 +1,7 @@
 *.iml
 .gradle
 /local.properties
+local.properties
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
@@ -12,4 +13,19 @@
 /captures
 .externalNativeBuild
 .cxx
-local.properties
+
+# Kotlin / IDE 本地缓存与日志
+.kotlin/
+
+# 签名与本地密钥（切勿提交）
+*.jks
+*.keystore
+*.key
+
+# 构建产物与发布包
+*.apk
+*.aab
+*.ap_
+*.dex
+app/release/
+**/outputs/

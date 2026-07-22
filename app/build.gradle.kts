@@ -16,8 +16,8 @@ android {
         applicationId = "com.wudongsong.keyring"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.2.1"
         resourceConfigurations += listOf("zh-rCN", "en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
