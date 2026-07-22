@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
@@ -7,13 +7,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.keyring"
+    namespace = "com.wudongsong.keyring"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.mypasswords"
+        applicationId = "com.wudongsong.keyring"
         minSdk = 29
         targetSdk = 36
         versionCode = 3
