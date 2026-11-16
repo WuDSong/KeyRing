@@ -1,8 +1,8 @@
-﻿package com.wudongsong.keyring.sync
+package com.wudongsong.keyring.sync
 
-import android.util.Base64
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.SecretKey
@@ -78,12 +78,9 @@ object SecureTransport {
         return mac.doFinal(data)
     }
 
-    private fun b64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
-    private fun b64d(s: String): ByteArray = Base64.decode(s, Base64.NO_WRAP)
+    private fun b64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+
+    private fun b64d(s: String): ByteArray = Base64.getDecoder().decode(s)
 }
 
-data class EncryptedPayload(
-    val nonceB64: String,
-    val ciphertextB64: String
-)
-
+data class EncryptedPayload(val nonceB64: String, val ciphertextB64: String)

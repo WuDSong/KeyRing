@@ -1,8 +1,9 @@
-﻿package com.wudongsong.keyring.data
+package com.wudongsong.keyring.data
 
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
+import java.util.UUID
 import kotlin.math.abs
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -10,13 +11,66 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.util.UUID
 
 class AppPreferences(context: Context) {
+    private val securePrefs by lazy {
+        val secure =
+            androidx.security.crypto.EncryptedSharedPreferences.create(
+                context.applicationContext,
+                "sync_secure_prefs",
+                androidx.security.crypto.MasterKey.Builder(context.applicationContext)
+                    .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+                    .build(),
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme
+                    .AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme
+                    .AES256_GCM,
+            )
+        val old = prefs.getString(KEY_TRUSTED_DEVICES, null)
+        if (old != null) {
+            if (!secure.contains(KEY_TRUSTED_DEVICES)) {
+                json.decodeFromString<List<TrustedDevice>>(old)
+                check(secure.edit().putString(KEY_TRUSTED_DEVICES, old).commit())
+            }
+            check(prefs.edit().remove(KEY_TRUSTED_DEVICES).commit())
+        }
+        secure
+    }
+
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    fun getScreenProtectionEnabled(): Boolean = prefs.getBoolean("screen_protection", true)
+
+    fun setScreenProtectionEnabled(value: Boolean) {
+        prefs.edit().putBoolean("screen_protection", value).apply()
+    }
+
+    fun getClipboardAutoClearEnabled(): Boolean = prefs.getBoolean("clipboard_auto_clear", true)
+
+    fun setClipboardAutoClearEnabled(value: Boolean) {
+        prefs.edit().putBoolean("clipboard_auto_clear", value).apply()
+    }
+
+    fun observeScreenProtectionEnabled(): Flow<Boolean> =
+        observeBoolean("screen_protection", ::getScreenProtectionEnabled)
+
+    fun observeClipboardAutoClearEnabled(): Flow<Boolean> =
+        observeBoolean("clipboard_auto_clear", ::getClipboardAutoClearEnabled)
+
+    private fun observeBoolean(name: String, read: () -> Boolean): Flow<Boolean> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == name) trySend(read())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(read())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     fun getMode(): ThemeMode {
         val ordinal = prefs.getInt(KEY_MODE, ThemeMode.SYSTEM.ordinal)
@@ -30,21 +84,27 @@ class AppPreferences(context: Context) {
     fun getAppLanguage(): String = prefs.getString(KEY_APP_LANGUAGE, LANG_SYSTEM) ?: LANG_SYSTEM
 
     fun setAppLanguage(language: String) {
-        val safe = when (language) {
-            LANG_SYSTEM, LANG_ZH_CN, LANG_EN -> language
-            else -> LANG_SYSTEM
-        }
+        val safe =
+            when (language) {
+                LANG_SYSTEM,
+                LANG_ZH_CN,
+                LANG_EN -> language
+                else -> LANG_SYSTEM
+            }
         prefs.edit().putString(KEY_APP_LANGUAGE, safe).apply()
     }
 
-    fun observeAppLanguage(): Flow<String> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_APP_LANGUAGE) trySend(getAppLanguage())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getAppLanguage())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeAppLanguage(): Flow<String> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_APP_LANGUAGE) trySend(getAppLanguage())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getAppLanguage())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     fun getListSortOrder(): PasswordListSortOrder {
         val ordinal = prefs.getInt(KEY_LIST_SORT, PasswordListSortOrder.TIME_DESC.ordinal)
@@ -55,14 +115,17 @@ class AppPreferences(context: Context) {
         prefs.edit().putInt(KEY_LIST_SORT, order.ordinal).apply()
     }
 
-    fun observeListSortOrder(): Flow<PasswordListSortOrder> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_LIST_SORT) trySend(getListSortOrder())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getListSortOrder())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeListSortOrder(): Flow<PasswordListSortOrder> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_LIST_SORT) trySend(getListSortOrder())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getListSortOrder())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     fun getAutoLockEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_LOCK, true)
 
@@ -70,14 +133,17 @@ class AppPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_AUTO_LOCK, enabled).apply()
     }
 
-    fun observeAutoLockEnabled(): Flow<Boolean> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_AUTO_LOCK) trySend(getAutoLockEnabled())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getAutoLockEnabled())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeAutoLockEnabled(): Flow<Boolean> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_AUTO_LOCK) trySend(getAutoLockEnabled())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getAutoLockEnabled())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     fun getBiometricUnlockEnabled(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK, false)
 
@@ -85,14 +151,17 @@ class AppPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_BIOMETRIC_UNLOCK, enabled).apply()
     }
 
-    fun observeBiometricUnlockEnabled(): Flow<Boolean> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_BIOMETRIC_UNLOCK) trySend(getBiometricUnlockEnabled())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getBiometricUnlockEnabled())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeBiometricUnlockEnabled(): Flow<Boolean> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_BIOMETRIC_UNLOCK) trySend(getBiometricUnlockEnabled())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getBiometricUnlockEnabled())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     fun getPasswordGeneratorRules(): PasswordGeneratorRules {
         val length = snapGeneratorLength(prefs.getInt(KEY_GEN_LENGTH, 16))
@@ -101,13 +170,14 @@ class AppPreferences(context: Context) {
             includeUppercase = prefs.getBoolean(KEY_GEN_UPPER, true),
             includeLowercase = prefs.getBoolean(KEY_GEN_LOWER, true),
             includeDigits = prefs.getBoolean(KEY_GEN_DIGITS, true),
-            includeSymbols = prefs.getBoolean(KEY_GEN_SYMBOLS, true)
+            includeSymbols = prefs.getBoolean(KEY_GEN_SYMBOLS, true),
         )
     }
 
     fun setPasswordGeneratorRules(rules: PasswordGeneratorRules) {
         val length = snapGeneratorLength(rules.length)
-        prefs.edit()
+        prefs
+            .edit()
             .putInt(KEY_GEN_LENGTH, length)
             .putBoolean(KEY_GEN_UPPER, rules.includeUppercase)
             .putBoolean(KEY_GEN_LOWER, rules.includeLowercase)
@@ -116,8 +186,7 @@ class AppPreferences(context: Context) {
             .apply()
     }
 
-    fun getNetworkForFaviconEnabled(): Boolean =
-        prefs.getBoolean(KEY_NETWORK_FAVICON, false)
+    fun getNetworkForFaviconEnabled(): Boolean = prefs.getBoolean(KEY_NETWORK_FAVICON, false)
 
     fun setNetworkForFaviconEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NETWORK_FAVICON, enabled).apply()
@@ -127,42 +196,48 @@ class AppPreferences(context: Context) {
         prefs.edit().putLong(KEY_LAST_UNLOCK_AT, System.currentTimeMillis()).apply()
     }
 
-    fun getLastSuccessfulUnlockTimestamp(): Long =
-        prefs.getLong(KEY_LAST_UNLOCK_AT, 0L)
+    fun getLastSuccessfulUnlockTimestamp(): Long = prefs.getLong(KEY_LAST_UNLOCK_AT, 0L)
 
-    fun observeLastSuccessfulUnlockTimestamp(): Flow<Long> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_LAST_UNLOCK_AT) trySend(getLastSuccessfulUnlockTimestamp())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getLastSuccessfulUnlockTimestamp())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeLastSuccessfulUnlockTimestamp(): Flow<Long> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_LAST_UNLOCK_AT) trySend(getLastSuccessfulUnlockTimestamp())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getLastSuccessfulUnlockTimestamp())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
-    fun observeNetworkForFaviconEnabled(): Flow<Boolean> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_NETWORK_FAVICON) trySend(getNetworkForFaviconEnabled())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getNetworkForFaviconEnabled())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeNetworkForFaviconEnabled(): Flow<Boolean> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_NETWORK_FAVICON) trySend(getNetworkForFaviconEnabled())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getNetworkForFaviconEnabled())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
-    fun observePasswordGeneratorRules(): Flow<PasswordGeneratorRules> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key != null && key.startsWith(PREFIX_GEN)) trySend(getPasswordGeneratorRules())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getPasswordGeneratorRules())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observePasswordGeneratorRules(): Flow<PasswordGeneratorRules> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key != null && key.startsWith(PREFIX_GEN))
+                            trySend(getPasswordGeneratorRules())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getPasswordGeneratorRules())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     private fun snapGeneratorLength(value: Int): Int {
         val opts = listOf(8, 12, 16, 20, 24, 32)
-        val v = value.coerceIn(
-            PasswordGeneratorRules.MIN_LENGTH,
-            PasswordGeneratorRules.MAX_LENGTH
-        )
+        val v = value.coerceIn(PasswordGeneratorRules.MIN_LENGTH, PasswordGeneratorRules.MAX_LENGTH)
         return opts.minBy { abs(it - v) }
     }
 
@@ -191,25 +266,33 @@ class AppPreferences(context: Context) {
         const val LANG_EN = "en"
     }
 
-    enum class DuplicatePolicy { SKIP, OVERWRITE_NEWER, KEEP_BOTH }
+    enum class DuplicatePolicy {
+        SKIP,
+        OVERWRITE_NEWER,
+        KEEP_BOTH,
+    }
 
     fun getDuplicatePolicy(): DuplicatePolicy {
         val name = prefs.getString(KEY_DUP_POLICY, DuplicatePolicy.OVERWRITE_NEWER.name)
-        return runCatching { DuplicatePolicy.valueOf(name ?: "") }.getOrDefault(DuplicatePolicy.OVERWRITE_NEWER)
+        return runCatching { DuplicatePolicy.valueOf(name ?: "") }
+            .getOrDefault(DuplicatePolicy.OVERWRITE_NEWER)
     }
 
     fun setDuplicatePolicy(policy: DuplicatePolicy) {
         prefs.edit().putString(KEY_DUP_POLICY, policy.name).apply()
     }
 
-    fun observeDuplicatePolicy(): Flow<DuplicatePolicy> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_DUP_POLICY) trySend(getDuplicatePolicy())
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(getDuplicatePolicy())
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.distinctUntilChanged()
+    fun observeDuplicatePolicy(): Flow<DuplicatePolicy> =
+        callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_DUP_POLICY) trySend(getDuplicatePolicy())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getDuplicatePolicy())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .distinctUntilChanged()
 
     fun getDeviceId(): String {
         val existing = prefs.getString(KEY_DEVICE_ID, null)
@@ -219,10 +302,14 @@ class AppPreferences(context: Context) {
         return id
     }
 
-    fun getDeviceName(): String = prefs.getString(KEY_DEVICE_NAME, android.os.Build.MODEL) ?: android.os.Build.MODEL
+    fun getDeviceName(): String =
+        prefs.getString(KEY_DEVICE_NAME, android.os.Build.MODEL) ?: android.os.Build.MODEL
 
     fun setDeviceName(name: String) {
-        prefs.edit().putString(KEY_DEVICE_NAME, name.trim().ifBlank { android.os.Build.MODEL }).apply()
+        prefs
+            .edit()
+            .putString(KEY_DEVICE_NAME, name.trim().ifBlank { android.os.Build.MODEL })
+            .apply()
     }
 
     @kotlinx.serialization.Serializable
@@ -231,28 +318,34 @@ class AppPreferences(context: Context) {
         val name: String,
         /** 32 bytes AES key, base64 */
         val sharedKeyB64: String,
-        val pairedAt: Long
+        val pairedAt: Long,
     )
 
     fun getTrustedDevices(): List<TrustedDevice> {
-        val raw = prefs.getString(KEY_TRUSTED_DEVICES, null) ?: return emptyList()
-        return runCatching { json.decodeFromString<List<TrustedDevice>>(raw) }.getOrDefault(emptyList())
+        val raw = securePrefs.getString(KEY_TRUSTED_DEVICES, null) ?: return emptyList()
+        return runCatching { json.decodeFromString<List<TrustedDevice>>(raw) }
+            .getOrDefault(emptyList())
     }
 
+    @Synchronized
     fun upsertTrustedDevice(device: TrustedDevice) {
         val list = getTrustedDevices().toMutableList()
         val idx = list.indexOfFirst { it.deviceId == device.deviceId }
         if (idx >= 0) list[idx] = device else list.add(device)
-        prefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(list)).apply()
+        check(securePrefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(list)).commit())
     }
 
+    @Synchronized
     fun removeTrustedDevice(deviceId: String) {
         val next = getTrustedDevices().filterNot { it.deviceId == deviceId }
-        prefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(next)).apply()
+        check(securePrefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(next)).commit())
     }
 
     fun trustedDeviceKey(deviceId: String): ByteArray? {
         val td = getTrustedDevices().firstOrNull { it.deviceId == deviceId } ?: return null
-        return runCatching { Base64.decode(td.sharedKeyB64, Base64.NO_WRAP) }.getOrNull()
+        return runCatching {
+                Base64.decode(td.sharedKeyB64, Base64.NO_WRAP).also { require(it.size == 32) }
+            }
+            .getOrNull()
     }
 }

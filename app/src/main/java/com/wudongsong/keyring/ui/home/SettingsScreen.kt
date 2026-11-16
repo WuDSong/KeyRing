@@ -1,4 +1,4 @@
-﻿package com.wudongsong.keyring.ui.home
+package com.wudongsong.keyring.ui.home
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,8 +31,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -58,6 +59,7 @@ import com.wudongsong.keyring.data.BiometricPasswordVault
 import com.wudongsong.keyring.data.PasswordListSortOrder
 import com.wudongsong.keyring.data.PasswordStore
 import com.wudongsong.keyring.data.ThemeMode
+import com.wudongsong.keyring.ui.rememberPasswordAction
 
 @Composable
 fun SettingsScreen(
@@ -66,42 +68,61 @@ fun SettingsScreen(
     appPreferences: AppPreferences,
     passwordStore: PasswordStore,
     biometricVault: BiometricPasswordVault,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val activity = context as FragmentActivity
-    val listSort by appPreferences.observeListSortOrder().collectAsStateWithLifecycle(
-        initialValue = appPreferences.getListSortOrder()
-    )
-    val autoLockEnabled by appPreferences.observeAutoLockEnabled().collectAsStateWithLifecycle(
-        initialValue = appPreferences.getAutoLockEnabled()
-    )
-    val biometricEnabled by appPreferences.observeBiometricUnlockEnabled().collectAsStateWithLifecycle(
-        initialValue = appPreferences.getBiometricUnlockEnabled()
-    )
-    val genRules by appPreferences.observePasswordGeneratorRules().collectAsStateWithLifecycle(
-        initialValue = appPreferences.getPasswordGeneratorRules()
-    )
-    val networkFaviconEnabled by appPreferences.observeNetworkForFaviconEnabled()
-        .collectAsStateWithLifecycle(
-            initialValue = appPreferences.getNetworkForFaviconEnabled()
-        )
-    val dupPolicy by appPreferences.observeDuplicatePolicy().collectAsStateWithLifecycle(
-        initialValue = appPreferences.getDuplicatePolicy()
-    )
+    val listSort by
+        appPreferences
+            .observeListSortOrder()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getListSortOrder())
+    val autoLockEnabled by
+        appPreferences
+            .observeAutoLockEnabled()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getAutoLockEnabled())
+    val biometricEnabled by
+        appPreferences
+            .observeBiometricUnlockEnabled()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getBiometricUnlockEnabled())
+    val genRules by
+        appPreferences
+            .observePasswordGeneratorRules()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getPasswordGeneratorRules())
+    val networkFaviconEnabled by
+        appPreferences
+            .observeNetworkForFaviconEnabled()
+            .collectAsStateWithLifecycle(
+                initialValue = appPreferences.getNetworkForFaviconEnabled()
+            )
+    val dupPolicy by
+        appPreferences
+            .observeDuplicatePolicy()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getDuplicatePolicy())
 
-    val lengthOptions = remember {
-        listOf(8, 12, 16, 20, 24, 32)
-    }
+    val screenProtection by
+        appPreferences
+            .observeScreenProtectionEnabled()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getScreenProtectionEnabled())
+    val clipboardClear by
+        appPreferences
+            .observeClipboardAutoClearEnabled()
+            .collectAsStateWithLifecycle(
+                initialValue = appPreferences.getClipboardAutoClearEnabled()
+            )
+
+    val lengthOptions = remember { listOf(8, 12, 16, 20, 24, 32) }
 
     var showBiometricEnrollDialog by remember { mutableStateOf(false) }
     var enrollPassword by remember { mutableStateOf("") }
     var enrollPasswordError by remember { mutableStateOf<String?>(null) }
+    val authAction = rememberPasswordAction {
+        enrollPasswordError = context.getString(R.string.auth_error_generic)
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             SettingsSectionHeader(text = stringResource(R.string.settings_section_appearance))
@@ -113,7 +134,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.DarkMode,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         },
                         options = ThemeMode.entries,
@@ -122,10 +143,11 @@ fun SettingsScreen(
                             when (mode) {
                                 ThemeMode.LIGHT -> stringResource(R.string.settings_theme_off)
                                 ThemeMode.DARK -> stringResource(R.string.settings_theme_on)
-                                ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_follow_system)
+                                ThemeMode.SYSTEM ->
+                                    stringResource(R.string.settings_theme_follow_system)
                             }
                         },
-                        onSelect = onThemeModeChange
+                        onSelect = onThemeModeChange,
                     )
                 }
             }
@@ -135,6 +157,20 @@ fun SettingsScreen(
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column {
                     SettingsSwitchRow(
+                        title = stringResource(R.string.screen_protection_title),
+                        summary = stringResource(R.string.screen_protection_summary),
+                        checked = screenProtection,
+                        onCheckedChange = appPreferences::setScreenProtectionEnabled,
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                    )
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.clipboard_clear_title),
+                        summary = stringResource(R.string.clipboard_clear_summary),
+                        checked = clipboardClear,
+                        onCheckedChange = appPreferences::setClipboardAutoClearEnabled,
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                    )
+                    SettingsSwitchRow(
                         title = stringResource(R.string.settings_auto_lock_title),
                         summary = stringResource(R.string.settings_auto_lock_summary),
                         checked = autoLockEnabled,
@@ -143,9 +179,9 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Lock,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
-                        }
+                        },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
                     SettingsSwitchRow(
@@ -153,20 +189,23 @@ fun SettingsScreen(
                         summary = stringResource(R.string.settings_biometric_summary),
                         checked = biometricEnabled,
                         onCheckedChange = { want ->
-                            if (!want) {
-                                biometricVault.clear()
-                                appPreferences.setBiometricUnlockEnabled(false)
-                            } else {
-                                if (!biometricVault.canEnrollStrongBiometric()) {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.biometric_unavailable),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                            authAction.run {
+                                if (!want) {
+                                    biometricVault.clear()
+                                    appPreferences.setBiometricUnlockEnabled(false)
                                 } else {
-                                    enrollPassword = ""
-                                    enrollPasswordError = null
-                                    showBiometricEnrollDialog = true
+                                    if (!biometricVault.canEnrollStrongBiometric()) {
+                                        Toast.makeText(
+                                                context,
+                                                context.getString(R.string.biometric_unavailable),
+                                                Toast.LENGTH_SHORT,
+                                            )
+                                            .show()
+                                    } else {
+                                        enrollPassword = ""
+                                        enrollPasswordError = null
+                                        showBiometricEnrollDialog = true
+                                    }
                                 }
                             }
                         },
@@ -174,9 +213,9 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Fingerprint,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
-                        }
+                        },
                     )
                 }
             }
@@ -191,7 +230,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Sort,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         },
                         options = PasswordListSortOrder.entries,
@@ -208,7 +247,7 @@ fun SettingsScreen(
                                     stringResource(R.string.sort_time_desc)
                             }
                         },
-                        onSelect = { appPreferences.setListSortOrder(it) }
+                        onSelect = { appPreferences.setListSortOrder(it) },
                     )
                 }
             }
@@ -226,9 +265,9 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Public,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
-                        }
+                        },
                     )
                 }
             }
@@ -241,7 +280,7 @@ fun SettingsScreen(
                         text = stringResource(R.string.settings_sync_dup_summary),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                     SettingsDropdownRow(
                         label = stringResource(R.string.settings_sync_dup_policy_title),
@@ -249,7 +288,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Sync,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         },
                         options = AppPreferences.DuplicatePolicy.entries.toList(),
@@ -264,7 +303,7 @@ fun SettingsScreen(
                                     stringResource(R.string.settings_sync_dup_keep_both)
                             }
                         },
-                        onSelect = { appPreferences.setDuplicatePolicy(it) }
+                        onSelect = { appPreferences.setDuplicatePolicy(it) },
                     )
                 }
             }
@@ -277,7 +316,7 @@ fun SettingsScreen(
                         text = stringResource(R.string.settings_generator_summary),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                     SettingsDropdownRow(
                         label = stringResource(R.string.settings_generator_length_label),
@@ -285,17 +324,15 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Password,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         },
                         options = lengthOptions,
                         selected = genRules.length,
-                        optionLabel = { n ->
-                            stringResource(R.string.settings_gen_length_bits, n)
-                        },
+                        optionLabel = { n -> stringResource(R.string.settings_gen_length_bits, n) },
                         onSelect = { n ->
                             appPreferences.setPasswordGeneratorRules(genRules.copy(length = n))
-                        }
+                        },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
                     SettingsCharsetSwitchRow(
@@ -305,14 +342,15 @@ fun SettingsScreen(
                             val next = genRules.copy(includeUppercase = v)
                             if (!next.hasAnyCharset()) {
                                 Toast.makeText(
-                                    context,
-                                    context.getString(R.string.settings_gen_must_one_charset),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        context,
+                                        context.getString(R.string.settings_gen_must_one_charset),
+                                        Toast.LENGTH_SHORT,
+                                    )
+                                    .show()
                             } else {
                                 appPreferences.setPasswordGeneratorRules(next)
                             }
-                        }
+                        },
                     )
                     SettingsCharsetSwitchRow(
                         title = stringResource(R.string.settings_gen_lower),
@@ -321,14 +359,15 @@ fun SettingsScreen(
                             val next = genRules.copy(includeLowercase = v)
                             if (!next.hasAnyCharset()) {
                                 Toast.makeText(
-                                    context,
-                                    context.getString(R.string.settings_gen_must_one_charset),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        context,
+                                        context.getString(R.string.settings_gen_must_one_charset),
+                                        Toast.LENGTH_SHORT,
+                                    )
+                                    .show()
                             } else {
                                 appPreferences.setPasswordGeneratorRules(next)
                             }
-                        }
+                        },
                     )
                     SettingsCharsetSwitchRow(
                         title = stringResource(R.string.settings_gen_digits),
@@ -337,14 +376,15 @@ fun SettingsScreen(
                             val next = genRules.copy(includeDigits = v)
                             if (!next.hasAnyCharset()) {
                                 Toast.makeText(
-                                    context,
-                                    context.getString(R.string.settings_gen_must_one_charset),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        context,
+                                        context.getString(R.string.settings_gen_must_one_charset),
+                                        Toast.LENGTH_SHORT,
+                                    )
+                                    .show()
                             } else {
                                 appPreferences.setPasswordGeneratorRules(next)
                             }
-                        }
+                        },
                     )
                     SettingsCharsetSwitchRow(
                         title = stringResource(R.string.settings_gen_symbols),
@@ -353,14 +393,15 @@ fun SettingsScreen(
                             val next = genRules.copy(includeSymbols = v)
                             if (!next.hasAnyCharset()) {
                                 Toast.makeText(
-                                    context,
-                                    context.getString(R.string.settings_gen_must_one_charset),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        context,
+                                        context.getString(R.string.settings_gen_must_one_charset),
+                                        Toast.LENGTH_SHORT,
+                                    )
+                                    .show()
                             } else {
                                 appPreferences.setPasswordGeneratorRules(next)
                             }
-                        }
+                        },
                     )
                 }
             }
@@ -370,6 +411,7 @@ fun SettingsScreen(
     if (showBiometricEnrollDialog) {
         AlertDialog(
             onDismissRequest = {
+                if (authAction.busy) return@AlertDialog
                 showBiometricEnrollDialog = false
                 enrollPassword = ""
                 enrollPasswordError = null
@@ -380,10 +422,11 @@ fun SettingsScreen(
                     Text(
                         text = stringResource(R.string.biometric_enroll_verify_desc),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
+                        enabled = !authAction.busy,
                         value = enrollPassword,
                         onValueChange = {
                             enrollPassword = it
@@ -393,71 +436,85 @@ fun SettingsScreen(
                         label = { Text(stringResource(R.string.auth_password_label)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        )
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
                     )
                     enrollPasswordError?.let { err ->
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = err,
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             },
             confirmButton = {
                 TextButton(
+                    enabled = !authAction.busy,
                     onClick = {
-                        if (!passwordStore.verifyPassword(enrollPassword)) {
-                            enrollPasswordError =
-                                context.getString(R.string.auth_error_wrong_password)
-                            return@TextButton
+                        authAction.run {
+                            val pwd = enrollPassword
+                            if (!passwordStore.verifyPassword(pwd)) {
+                                enrollPasswordError =
+                                    context.getString(R.string.auth_error_wrong_password)
+                                return@run
+                            }
+                            enrollPassword = ""
+                            showBiometricEnrollDialog = false
+                            enrollPasswordError = null
+                            biometricVault
+                                .enrollEncryptPassword(activity, pwd)
+                                .fold(
+                                    onSuccess = {
+                                        appPreferences.setBiometricUnlockEnabled(true)
+                                        Toast.makeText(
+                                                context,
+                                                context.getString(
+                                                    R.string.biometric_enroll_success
+                                                ),
+                                                Toast.LENGTH_SHORT,
+                                            )
+                                            .show()
+                                    },
+                                    onFailure = { e ->
+                                        Toast.makeText(
+                                                context,
+                                                context.getString(
+                                                    R.string.biometric_enroll_failed,
+                                                    e.message ?: "",
+                                                ),
+                                                Toast.LENGTH_LONG,
+                                            )
+                                            .show()
+                                    },
+                                )
                         }
-                        val pwd = enrollPassword
-                        enrollPassword = ""
-                        showBiometricEnrollDialog = false
-                        enrollPasswordError = null
-                        biometricVault.enrollEncryptPassword(activity, pwd) { result ->
-                            result.fold(
-                                onSuccess = {
-                                    appPreferences.setBiometricUnlockEnabled(true)
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.biometric_enroll_success),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                onFailure = { e ->
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(
-                                            R.string.biometric_enroll_failed,
-                                            e.message ?: ""
-                                        ),
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            )
-                        }
-                    }
+                    },
                 ) {
-                    Text(stringResource(R.string.biometric_enroll_continue))
+                    if (authAction.busy)
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    else Text(stringResource(R.string.biometric_enroll_continue))
                 }
             },
             dismissButton = {
                 TextButton(
+                    enabled = !authAction.busy,
                     onClick = {
                         showBiometricEnrollDialog = false
                         enrollPassword = ""
                         enrollPasswordError = null
-                    }
+                    },
                 ) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -467,25 +524,20 @@ private fun SettingsCharsetSwitchRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.weight(1f, fill = false),
         )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -496,13 +548,11 @@ private fun SettingsSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     leadingIcon: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         leadingIcon()
         Spacer(modifier = Modifier.width(12.dp))
@@ -510,19 +560,16 @@ private fun SettingsSwitchRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = summary,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -532,7 +579,7 @@ private fun SettingsSectionHeader(text: String) {
         text = text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
     )
 }
 
@@ -544,56 +591,48 @@ private fun <T> SettingsDropdownRow(
     selected: T,
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedText = optionLabel(selected)
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             leadingIcon()
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier.weight(1f, fill = false),
             )
         }
         Box(contentAlignment = Alignment.CenterEnd) {
             OutlinedButton(
                 onClick = { expanded = true },
-                modifier = Modifier.widthIn(min = 120.dp, max = 220.dp)
+                modifier = Modifier.widthIn(min = 120.dp, max = 220.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
                         text = selectedText,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
-                    Icon(
-                        imageVector = Icons.Filled.ArrowDropDown,
-                        contentDescription = null
-                    )
+                    Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = null)
                 }
             }
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.widthIn(min = 200.dp, max = 320.dp)
+                modifier = Modifier.widthIn(min = 200.dp, max = 320.dp),
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
@@ -601,7 +640,7 @@ private fun <T> SettingsDropdownRow(
                         onClick = {
                             onSelect(option)
                             expanded = false
-                        }
+                        },
                     )
                 }
             }

@@ -1,4 +1,4 @@
-﻿package com.wudongsong.keyring.ui.auth
+package com.wudongsong.keyring.ui.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,14 +32,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.wudongsong.keyring.R
 import com.wudongsong.keyring.data.PasswordStore
+import com.wudongsong.keyring.ui.rememberPasswordAction
 
 @Composable
 fun ChangePasswordScreen(
     passwordStore: PasswordStore,
     onSuccess: () -> Unit,
     onCancel: () -> Unit,
-    onPasswordChanged: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onPasswordChanged: suspend () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     var oldPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -47,25 +48,25 @@ fun ChangePasswordScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val authAction = rememberPasswordAction {
+        errorMessage = context.getString(R.string.auth_error_generic)
+    }
     val scroll = rememberScrollState()
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(scroll)
-            .padding(24.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(scroll).padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = stringResource(R.string.change_password_title),
-            style = MaterialTheme.typography.headlineSmall
+            style = MaterialTheme.typography.headlineSmall,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.change_password_subtitle),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(24.dp))
         OutlinedTextField(
@@ -78,10 +79,8 @@ fun ChangePasswordScreen(
             label = { Text(stringResource(R.string.change_password_old_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Next
-            )
+            keyboardOptions =
+                KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
         )
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
@@ -94,10 +93,8 @@ fun ChangePasswordScreen(
             label = { Text(stringResource(R.string.change_password_new_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Next
-            )
+            keyboardOptions =
+                KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
         )
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
@@ -110,24 +107,21 @@ fun ChangePasswordScreen(
             label = { Text(stringResource(R.string.change_password_confirm_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { focusManager.clearFocus() }
-            )
+            keyboardOptions =
+                KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         )
         if (errorMessage != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = errorMessage!!,
                 color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
         Button(
+            enabled = !authAction.busy,
             onClick = {
                 when {
                     newPassword.length < PasswordStore.MIN_PASSWORD_LENGTH ->
@@ -135,34 +129,38 @@ fun ChangePasswordScreen(
                     newPassword != confirm ->
                         errorMessage = context.getString(R.string.auth_error_mismatch)
                     else -> {
-                        passwordStore.changePassword(oldPassword, newPassword).fold(
-                            onSuccess = {
-                                onPasswordChanged()
-                                onSuccess()
-                            },
-                            onFailure = { e ->
-                                errorMessage = when (e.message) {
-                                    "wrong_old" ->
-                                        context.getString(R.string.change_password_error_old_wrong)
-                                    "too_short" ->
-                                        context.getString(R.string.auth_error_too_short)
-                                    else ->
-                                        context.getString(R.string.auth_error_generic)
-                                }
-                            }
-                        )
+                        authAction.run {
+                            passwordStore
+                                .changePassword(oldPassword, newPassword)
+                                .fold(
+                                    onSuccess = {
+                                        onPasswordChanged()
+                                        onSuccess()
+                                    },
+                                    onFailure = { e ->
+                                        errorMessage =
+                                            when (e.message) {
+                                                "wrong_old" ->
+                                                    context.getString(
+                                                        R.string.change_password_error_old_wrong
+                                                    )
+                                                "too_short" ->
+                                                    context.getString(R.string.auth_error_too_short)
+                                                else ->
+                                                    context.getString(R.string.auth_error_generic)
+                                            }
+                                    },
+                                )
+                        }
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.change_password_save))
         }
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = onCancel,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.change_password_cancel))
         }
     }

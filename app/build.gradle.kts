@@ -24,6 +24,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Device tests can run beside the user's vault without replacing its installed APK.
+            if (providers.gradleProperty("keyring.validation").orNull == "true") {
+                applicationIdSuffix = ".validation"
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -56,6 +62,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.security.crypto)
+    implementation("net.zetetic:sqlcipher-android:4.10.0@aar")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

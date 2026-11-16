@@ -1,58 +1,67 @@
-﻿package com.wudongsong.keyring.data
+package com.wudongsong.keyring.data
 
 import android.content.Context
-import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import java.security.MessageDigest
+import com.wudongsong.keyring.security.PasswordHash
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class PasswordStore(context: Context) {
+    private val mutex = Mutex()
     private val appContext = context.applicationContext
 
     private val prefs by lazy {
-        val masterKey = MasterKey.Builder(appContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        val masterKey =
+            MasterKey.Builder(appContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
         EncryptedSharedPreferences.create(
             appContext,
             PREFS_NAME,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }
 
-    fun isPasswordSet(): Boolean =
-        prefs.getString(KEY_PASSWORD_HASH, null) != null
+    suspend fun isPasswordSet(): Boolean =
+        withContext(Dispatchers.IO) { prefs.getString(KEY_PASSWORD_HASH, null) != null }
 
-    fun setPassword(plainPassword: String): Result<Unit> {
-        if (plainPassword.length < MIN_PASSWORD_LENGTH) {
-            return Result.failure(IllegalArgumentException("too_short"))
-        }
-        prefs.edit().putString(KEY_PASSWORD_HASH, hash(plainPassword)).apply()
-        return Result.success(Unit)
-    }
+    suspend fun setPassword(plainPassword: String): Result<Unit> =
+        withContext(Dispatchers.IO) { mutex.withLock { savePassword(plainPassword) } }
 
-    fun verifyPassword(plainPassword: String): Boolean {
+    suspend fun verifyPassword(plainPassword: String): Boolean =
+        withContext(Dispatchers.IO) { mutex.withLock { verifyAndUpgrade(plainPassword) } }
+
+    private fun verifyAndUpgrade(password: String): Boolean {
         val stored = prefs.getString(KEY_PASSWORD_HASH, null) ?: return false
-        return hash(plainPassword) == stored
+        if (!PasswordHash.verify(password, stored)) return false
+        if (PasswordHash.isLegacy(stored)) {
+            check(
+                prefs.edit().putString(KEY_PASSWORD_HASH, PasswordHash.create(password)).commit()
+            ) {
+                "Cannot upgrade password verifier"
+            }
+        }
+        return true
     }
 
-    fun changePassword(oldPassword: String, newPassword: String): Result<Unit> {
-        if (!verifyPassword(oldPassword)) {
-            return Result.failure(IllegalArgumentException("wrong_old"))
+    suspend fun changePassword(oldPassword: String, newPassword: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                runCatching {
+                    require(verifyAndUpgrade(oldPassword)) { "wrong_old" }
+                    savePassword(newPassword).getOrThrow()
+                }
+            }
         }
-        if (newPassword.length < MIN_PASSWORD_LENGTH) {
-            return Result.failure(IllegalArgumentException("too_short"))
-        }
-        prefs.edit().putString(KEY_PASSWORD_HASH, hash(newPassword)).apply()
-        return Result.success(Unit)
-    }
 
-    private fun hash(password: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(password.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(digest, Base64.NO_WRAP)
+    private fun savePassword(password: String): Result<Unit> = runCatching {
+        require(password.length >= MIN_PASSWORD_LENGTH) { "too_short" }
+        check(prefs.edit().putString(KEY_PASSWORD_HASH, PasswordHash.create(password)).commit()) {
+            "Cannot save password verifier"
+        }
     }
 
     companion object {

@@ -1,4 +1,4 @@
-﻿package com.wudongsong.keyring.data
+package com.wudongsong.keyring.data
 
 import android.content.Context
 import com.wudongsong.keyring.data.local.PasswordEntry
@@ -8,15 +8,15 @@ import com.wudongsong.keyring.sync.MergeEngine
 import com.wudongsong.keyring.sync.MergeStats
 import com.wudongsong.keyring.sync.SyncArchive
 import com.wudongsong.keyring.util.ImageStorage
+import java.text.Collator
+import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
-import java.text.Collator
-import java.util.Locale
 
 class PasswordEntryRepository(
     private val dao: PasswordEntryDao,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
 ) {
     private val titleCollator: Collator = Collator.getInstance(Locale.getDefault())
 
@@ -28,12 +28,17 @@ class PasswordEntryRepository(
     fun searchEntries(query: String): Flow<List<PasswordEntry>> {
         val q = query.trim()
         if (q.isEmpty()) return flowOf(emptyList())
-        return combine(dao.searchEntriesLike(q), appPreferences.observeListSortOrder()) { list, order ->
+        return combine(dao.searchEntriesLike(q), appPreferences.observeListSortOrder()) {
+            list,
+            order ->
             sortEntries(list, order)
         }
     }
 
     suspend fun getEntry(id: Long): PasswordEntry? = dao.getById(id)
+
+    suspend fun importBackup(entries: List<PasswordEntry>, policy: ImportPolicy): ImportPlan =
+        dao.importBackup(entries, policy)
 
     suspend fun insert(entry: PasswordEntry): Long = dao.insert(entry)
 
@@ -45,7 +50,7 @@ class PasswordEntryRepository(
 
     suspend fun mergeSyncArchive(
         parsed: List<SyncArchive.ParsedEntry>,
-        policy: AppPreferences.DuplicatePolicy
+        policy: AppPreferences.DuplicatePolicy,
     ): MergeStats = MergeEngine.merge(this, parsed, policy)
 
     fun observeEntryCount(): Flow<Int> = dao.observeEntryCount()
@@ -61,13 +66,16 @@ class PasswordEntryRepository(
 
     suspend fun deleteEntry(context: Context, id: Long) {
         val entry = dao.getById(id) ?: return
+        dao.deleteById(id)
         entry.allAttachmentPaths().forEach { ImageStorage.deleteIfExists(it) }
         ImageStorage.deleteIfExists(entry.imagePath)
         ImageStorage.deleteIfExists(entry.avatarImagePath)
-        dao.deleteById(id)
     }
 
-    private fun sortEntries(list: List<PasswordEntry>, order: PasswordListSortOrder): List<PasswordEntry> {
+    private fun sortEntries(
+        list: List<PasswordEntry>,
+        order: PasswordListSortOrder,
+    ): List<PasswordEntry> {
         return when (order) {
             PasswordListSortOrder.NAME_ASC ->
                 list.sortedWith { a, b -> titleCollator.compare(a.title, b.title) }

@@ -1,8 +1,9 @@
-﻿package com.wudongsong.keyring.ui.entries
+package com.wudongsong.keyring.ui.entries
 
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.layout.Arrangement
@@ -51,21 +52,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.ViewModelProvider
 import coil.compose.AsyncImage
 import com.wudongsong.keyring.R
 import com.wudongsong.keyring.data.AppPreferences
 import com.wudongsong.keyring.data.PasswordEntryRepository
 import com.wudongsong.keyring.data.local.PasswordEntry
-import com.wudongsong.keyring.data.local.allAttachmentPaths
 import com.wudongsong.keyring.data.local.encodeAttachmentPathsJson
+import com.wudongsong.keyring.ui.rememberExternalActivityLauncher
 import com.wudongsong.keyring.util.ImageStorage
 import com.wudongsong.keyring.util.PasswordGenerator
 import com.wudongsong.keyring.util.UrlValidation
 import com.wudongsong.keyring.util.WebsiteFaviconFetcher
-import java.util.UUID
-import kotlinx.coroutines.launch
 import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun AddPasswordScreen(
@@ -75,51 +81,69 @@ fun AddPasswordScreen(
     modifier: Modifier = Modifier,
     entryId: Long? = null,
     onRegisterTopBarSave: ((() -> Unit)?) -> Unit = {},
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    onNavigateBack: () -> Unit = {},
+    onRegisterBackAction: ((() -> Unit)?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val draft =
+        remember(entryId) {
+            ViewModelProvider(context as FragmentActivity)[
+                "entry-editor:${entryId ?: "new"}", EntryEditorViewModel::class.java]
+        }
+    var showDiscard by remember { mutableStateOf(false) }
+    val saving by draft.saving
+    val loaded by draft.loaded
+    val requestBack: () -> Unit = {
+        if (!saving) {
+            if (loaded && draft.snapshot() != draft.baseline) showDiscard = true
+            else {
+                draft.discard()
+                onNavigateBack()
+            }
+        }
+    }
+    BackHandler { requestBack() }
 
-    var title by remember { mutableStateOf("") }
-    var accountName by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    var title by draft.title
+    var accountName by draft.accountName
+    var username by draft.username
+    var password by draft.password
+    var confirmPassword by draft.confirmPassword
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
-    var url by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var detailedDescription by remember { mutableStateOf("") }
-    var tags by remember { mutableStateOf("") }
-    var attachmentPaths by remember { mutableStateOf<List<String>>(emptyList()) }
-    var avatarImagePath by remember { mutableStateOf<String?>(null) }
+    var url by draft.url
+    var description by draft.description
+    var detailedDescription by draft.detailedDescription
+    var tags by draft.tags
+    var attachmentPaths by draft.attachmentPaths
+    var avatarImagePath by draft.avatarImagePath
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var faviconLoading by remember { mutableStateOf(false) }
     var showNetworkFaviconDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(entryId) {
-        if (entryId == null) return@LaunchedEffect
-        val e = repository.getEntry(entryId) ?: return@LaunchedEffect
-        title = e.title
-        accountName = e.accountName
-        username = e.username
-        password = e.password
-        confirmPassword = e.password
-        url = e.url
-        description = e.description
-        detailedDescription = e.detailedDescription ?: ""
-        tags = e.tags
-        attachmentPaths = e.allAttachmentPaths()
-        avatarImagePath = e.avatarImagePath
+        if (draft.loaded.value) return@LaunchedEffect
+        try {
+            val entry = entryId?.let { repository.getEntry(it) ?: error("missing_entry") }
+            draft.initialize(entry)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            errorMessage = context.getString(R.string.editor_load_failed)
+        }
     }
 
     SideEffect {
+        onRegisterBackAction(requestBack)
         onRegisterTopBarSave {
+            if (saving || !loaded || faviconLoading) return@onRegisterTopBarSave
             if (title.isBlank()) {
                 errorMessage = context.getString(R.string.error_title_required)
                 return@onRegisterTopBarSave
             }
-            if (entryId == null && !UrlValidation.isAcceptableUrlOrEmpty(url)) {
+            if (!UrlValidation.isAcceptableUrlOrEmpty(url)) {
                 errorMessage = context.getString(R.string.error_url_invalid)
                 return@onRegisterTopBarSave
             }
@@ -127,54 +151,47 @@ fun AddPasswordScreen(
                 errorMessage = context.getString(R.string.error_password_confirm_mismatch)
                 return@onRegisterTopBarSave
             }
+            val existing = draft.original
+            val now = System.currentTimeMillis()
+            val entry =
+                PasswordEntry(
+                    id = existing?.id ?: 0,
+                    uuid = existing?.uuid ?: UUID.randomUUID().toString(),
+                    title = title.trim(),
+                    accountName = accountName.trim(),
+                    username = username.trim(),
+                    password = password,
+                    url = url.trim(),
+                    description = description.trim(),
+                    detailedDescription = detailedDescription.trim().ifBlank { null },
+                    tags = tags.trim(),
+                    imagePath = null,
+                    attachmentsJson = encodeAttachmentPathsJson(attachmentPaths),
+                    avatarImagePath = avatarImagePath,
+                    createdAt = existing?.createdAt ?: now,
+                    updatedAt = now,
+                )
+            draft.saving.value = true
             scope.launch {
-                if (entryId == null) {
-                    val now = System.currentTimeMillis()
-                    val entry = PasswordEntry(
-                        uuid = UUID.randomUUID().toString(),
-                        title = title.trim(),
-                        accountName = accountName.trim(),
-                        username = username.trim(),
-                        password = password,
-                        url = url.trim(),
-                        description = description.trim(),
-                        detailedDescription = detailedDescription.trim().ifBlank { null },
-                        tags = tags.trim(),
-                        imagePath = null,
-                        attachmentsJson = encodeAttachmentPathsJson(attachmentPaths),
-                        avatarImagePath = avatarImagePath,
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                    repository.insert(entry)
-                } else {
-                    val existing = repository.getEntry(entryId) ?: return@launch
-                    val oldAttachmentPaths = existing.allAttachmentPaths()
-                    oldAttachmentPaths.filter { it !in attachmentPaths }.forEach {
-                        ImageStorage.deleteIfExists(it)
+                try {
+                    // Complete the commit and ownership transfer even if locking disposes this
+                    // screen.
+                    withContext(NonCancellable) {
+                        val saved =
+                            if (existing == null) entry.copy(id = repository.insert(entry))
+                            else entry.also { repository.updateEntry(it) }
+                        draft.committed(saved)
                     }
-                    if (existing.avatarImagePath != avatarImagePath) {
-                        ImageStorage.deleteIfExists(existing.avatarImagePath)
-                    }
-                    val now = System.currentTimeMillis()
-                    repository.updateEntry(
-                        existing.copy(
-                            title = title.trim(),
-                            accountName = accountName.trim(),
-                            username = username.trim(),
-                            password = password,
-                            url = url.trim(),
-                            description = description.trim(),
-                            detailedDescription = detailedDescription.trim().ifBlank { null },
-                            tags = tags.trim(),
-                            imagePath = null,
-                            attachmentsJson = encodeAttachmentPathsJson(attachmentPaths),
-                            avatarImagePath = avatarImagePath,
-                            updatedAt = now
-                        )
-                    )
+                    currentCoroutineContext().ensureActive()
+                    onSaved()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    errorMessage = context.getString(R.string.editor_save_failed)
+                    Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                } finally {
+                    draft.finishSaving()
                 }
-                onSaved()
             }
         }
     }
@@ -182,50 +199,73 @@ fun AddPasswordScreen(
     DisposableEffect(Unit) {
         onDispose {
             onRegisterTopBarSave(null)
+            onRegisterBackAction(null)
         }
     }
 
-    val multiImagePicker = rememberLauncherForActivityResult(
-        contract = PickMultipleVisualMedia()
-    ) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val newPaths = uris.mapNotNull { ImageStorage.copyFromUri(context, it) }
-        if (newPaths.isNotEmpty()) {
-            attachmentPaths = attachmentPaths + newPaths
+    val multiImagePicker =
+        rememberExternalActivityLauncher(contract = PickMultipleVisualMedia()) { uris ->
+            if (uris.isEmpty()) return@rememberExternalActivityLauncher
+            val newPaths =
+                uris.mapNotNull { ImageStorage.copyFromUri(context, it)?.let(draft::register) }
+            if (newPaths.isNotEmpty()) {
+                attachmentPaths = attachmentPaths + newPaths
+            }
         }
-    }
 
-    val avatarPicker = rememberLauncherForActivityResult(
-        contract = PickVisualMedia()
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        val path = ImageStorage.copyFromUri(context, uri)
-        if (path != null) {
-            ImageStorage.deleteIfExists(avatarImagePath)
-            avatarImagePath = path
+    val avatarPicker =
+        rememberExternalActivityLauncher(contract = PickVisualMedia()) { uri ->
+            uri ?: return@rememberExternalActivityLauncher
+            val path = ImageStorage.copyFromUri(context, uri)?.let(draft::register)
+            if (path != null) {
+                avatarImagePath = draft.register(path)
+            }
         }
-    }
 
-    val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: android.net.Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        val path = ImageStorage.copyFromUri(context, uri)
-        if (path != null) {
-            ImageStorage.deleteIfExists(avatarImagePath)
-            avatarImagePath = path
+    val filePicker =
+        rememberExternalActivityLauncher(contract = ActivityResultContracts.GetContent()) {
+            uri: android.net.Uri? ->
+            uri ?: return@rememberExternalActivityLauncher
+            val path = ImageStorage.copyFromUri(context, uri)?.let(draft::register)
+            if (path != null) {
+                avatarImagePath = draft.register(path)
+            }
         }
-    }
 
-    val multiFilePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris: List<android.net.Uri> ->
-        val newPaths = uris.mapNotNull { ImageStorage.copyFromUri(context, it) }
-        if (newPaths.isNotEmpty()) {
-            attachmentPaths = attachmentPaths + newPaths
+    val multiFilePicker =
+        rememberExternalActivityLauncher(
+            contract = ActivityResultContracts.GetMultipleContents()
+        ) { uris: List<android.net.Uri> ->
+            val newPaths =
+                uris.mapNotNull { ImageStorage.copyFromUri(context, it)?.let(draft::register) }
+            if (newPaths.isNotEmpty()) {
+                attachmentPaths = attachmentPaths + newPaths
+            }
         }
-    }
 
+    if (showDiscard) {
+        AlertDialog(
+            onDismissRequest = { showDiscard = false },
+            title = { Text(stringResource(R.string.editor_discard_title)) },
+            text = { Text(stringResource(R.string.editor_discard_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscard = false
+                        draft.discard()
+                        onNavigateBack()
+                    }
+                ) {
+                    Text(stringResource(R.string.editor_discard))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscard = false }) {
+                    Text(stringResource(R.string.editor_keep_editing))
+                }
+            },
+        )
+    }
     val scroll = rememberScrollState()
     val urlInvalidMessage = stringResource(R.string.error_url_invalid)
 
@@ -233,18 +273,18 @@ fun AddPasswordScreen(
     var showAttachmentPickerDialog by remember { mutableStateOf(false) }
 
     Column(
-        modifier = modifier
-            .verticalScroll(scroll)
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier =
+            modifier
+                .verticalScroll(scroll)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (saving || !loaded) CircularProgressIndicator(modifier = Modifier.size(24.dp))
         TitleAvatarSection(
             title = title,
             avatarImagePath = avatarImagePath,
-            onEditAvatarClick = {
-                showAvatarPickerDialog = true
-            }
+            onEditAvatarClick = { showAvatarPickerDialog = true },
         )
 
         if (showAvatarPickerDialog) {
@@ -256,9 +296,7 @@ fun AddPasswordScreen(
                     TextButton(
                         onClick = {
                             showAvatarPickerDialog = false
-                            avatarPicker.launch(
-                                PickVisualMediaRequest(PickVisualMedia.ImageOnly)
-                            )
+                            avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
                         }
                     ) {
                         Text("相册")
@@ -273,10 +311,11 @@ fun AddPasswordScreen(
                     ) {
                         Text("文件管理器")
                     }
-                }
+                },
             )
         }
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = title,
             onValueChange = {
                 title = it
@@ -284,9 +323,10 @@ fun AddPasswordScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_title)) },
-            singleLine = true
+            singleLine = true,
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = url,
             onValueChange = {
                 url = it
@@ -296,20 +336,21 @@ fun AddPasswordScreen(
             label = { Text(stringResource(R.string.field_url)) },
             singleLine = true,
             isError = errorMessage == urlInvalidMessage,
-            supportingText = if (errorMessage == urlInvalidMessage) {
-                { Text(urlInvalidMessage) }
-            } else {
-                null
-            }
+            supportingText =
+                if (errorMessage == urlInvalidMessage) {
+                    { Text(urlInvalidMessage) }
+                } else {
+                    null
+                },
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
+                horizontalArrangement = Arrangement.Start,
             ) {
                 TextButton(
                     onClick = {
@@ -320,10 +361,11 @@ fun AddPasswordScreen(
                         val u = url.trim()
                         if (u.isEmpty() || !UrlValidation.isAcceptableUrlOrEmpty(u)) {
                             Toast.makeText(
-                                context,
-                                context.getString(R.string.error_favicon_url_required),
-                                Toast.LENGTH_SHORT
-                            ).show()
+                                    context,
+                                    context.getString(R.string.error_favicon_url_required),
+                                    Toast.LENGTH_SHORT,
+                                )
+                                .show()
                             return@TextButton
                         }
                         scope.launch {
@@ -331,57 +373,52 @@ fun AddPasswordScreen(
                             val result = WebsiteFaviconFetcher.fetchAndSave(context, u)
                             faviconLoading = false
                             result.fold(
-                                onSuccess = { path ->
-                                    ImageStorage.deleteIfExists(avatarImagePath)
-                                    avatarImagePath = path
-                                },
+                                onSuccess = { path -> avatarImagePath = draft.register(path) },
                                 onFailure = {
                                     Toast.makeText(
-                                        context,
-                                        context.getString(R.string.error_favicon_fetch_failed),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+                                            context,
+                                            context.getString(R.string.error_favicon_fetch_failed),
+                                            Toast.LENGTH_SHORT,
+                                        )
+                                        .show()
+                                },
                             )
                         }
                     },
-                    enabled = !faviconLoading
+                    enabled = loaded && !saving && !faviconLoading,
                 ) {
                     Text(stringResource(R.string.action_use_site_icon))
                 }
                 if (faviconLoading) {
                     Spacer(modifier = Modifier.width(4.dp))
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 }
             }
             TextButton(
-                onClick = {
-                    ImageStorage.deleteIfExists(avatarImagePath)
-                    avatarImagePath = null
-                },
-                enabled = !faviconLoading
+                onClick = { avatarImagePath = null },
+                enabled = loaded && !saving && !faviconLoading,
             ) {
                 Text(stringResource(R.string.action_use_default_icon))
             }
         }
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = accountName,
             onValueChange = { accountName = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_account_name)) },
-            singleLine = true
+            singleLine = true,
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = username,
             onValueChange = { username = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_username)) },
-            singleLine = true
+            singleLine = true,
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = password,
             onValueChange = {
                 password = it
@@ -390,55 +427,58 @@ fun AddPasswordScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_password)) },
             singleLine = true,
-            visualTransformation = if (passwordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
+            visualTransformation =
+                if (passwordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
             trailingIcon = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    IconButton(
-                        onClick = { passwordVisible = !passwordVisible }
-                    ) {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
-                            imageVector = if (passwordVisible) {
-                                Icons.Filled.VisibilityOff
-                            } else {
-                                Icons.Filled.Visibility
-                            },
-                            contentDescription = stringResource(
+                            imageVector =
                                 if (passwordVisible) {
-                                    R.string.detail_hide_password_desc
+                                    Icons.Filled.VisibilityOff
                                 } else {
-                                    R.string.detail_show_password_desc
-                                }
-                            )
+                                    Icons.Filled.Visibility
+                                },
+                            contentDescription =
+                                stringResource(
+                                    if (passwordVisible) {
+                                        R.string.detail_hide_password_desc
+                                    } else {
+                                        R.string.detail_show_password_desc
+                                    }
+                                ),
                         )
                     }
                     TextButton(
                         onClick = {
-                            val generated = PasswordGenerator.generate(
-                                appPreferences.getPasswordGeneratorRules()
-                            )
+                            val generated =
+                                PasswordGenerator.generate(
+                                    appPreferences.getPasswordGeneratorRules()
+                                )
                             password = generated
                             confirmPassword = generated
                             errorMessage = null
                         },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.generator_action_generate),
                             style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1
+                            maxLines = 1,
                         )
                     }
                 }
-            }
+            },
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = confirmPassword,
             onValueChange = {
                 confirmPassword = it
@@ -447,76 +487,78 @@ fun AddPasswordScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_confirm_password)) },
             singleLine = true,
-            visualTransformation = if (confirmPasswordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
+            visualTransformation =
+                if (confirmPasswordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
             trailingIcon = {
-                IconButton(
-                    onClick = { confirmPasswordVisible = !confirmPasswordVisible }
-                ) {
+                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
                     Icon(
-                        imageVector = if (confirmPasswordVisible) {
-                            Icons.Filled.VisibilityOff
-                        } else {
-                            Icons.Filled.Visibility
-                        },
-                        contentDescription = stringResource(
+                        imageVector =
                             if (confirmPasswordVisible) {
-                                R.string.detail_hide_password_desc
+                                Icons.Filled.VisibilityOff
                             } else {
-                                R.string.detail_show_password_desc
-                            }
-                        )
+                                Icons.Filled.Visibility
+                            },
+                        contentDescription =
+                            stringResource(
+                                if (confirmPasswordVisible) {
+                                    R.string.detail_hide_password_desc
+                                } else {
+                                    R.string.detail_show_password_desc
+                                }
+                            ),
                     )
                 }
-            }
+            },
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = description,
             onValueChange = { description = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_description)) },
-            minLines = 2
+            minLines = 2,
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = detailedDescription,
             onValueChange = { detailedDescription = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.field_detailed_description)) },
-            minLines = 4
+            minLines = 4,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.add_advanced_section),
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedTextField(
+            enabled = loaded && !saving,
             value = tags,
             onValueChange = { tags = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.dialog_tags_label)) },
             supportingText = { Text(stringResource(R.string.field_tags_hint)) },
             minLines = 2,
-            maxLines = 4
+            maxLines = 4,
         )
         FilledTonalButton(
-            onClick = {
-                showAttachmentPickerDialog = true
-            },
-            modifier = Modifier.fillMaxWidth()
+            onClick = { showAttachmentPickerDialog = true },
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Image,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.action_attach_image))
@@ -549,7 +591,7 @@ fun AddPasswordScreen(
                     ) {
                         Text("文件管理器")
                     }
-                }
+                },
             )
         }
 
@@ -557,30 +599,29 @@ fun AddPasswordScreen(
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                itemsIndexed(
-                    items = attachmentPaths,
-                    key = { index, path -> "$index-$path" }
-                ) { index, path ->
+                itemsIndexed(items = attachmentPaths, key = { index, path -> "$index-$path" }) {
+                    index,
+                    path ->
                     Box {
                         AsyncImage(
                             model = File(path),
                             contentDescription = stringResource(R.string.add_image_preview_desc),
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(120.dp)
+                            modifier = Modifier.size(120.dp),
                         )
                         IconButton(
                             onClick = {
-                                ImageStorage.deleteIfExists(path)
-                                attachmentPaths = attachmentPaths.filterIndexed { i, _ -> i != index }
+                                attachmentPaths =
+                                    attachmentPaths.filterIndexed { i, _ -> i != index }
                             },
-                            modifier = Modifier.align(Alignment.TopEnd)
+                            modifier = Modifier.align(Alignment.TopEnd),
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = stringResource(R.string.action_remove_one_attachment)
+                                contentDescription =
+                                    stringResource(R.string.action_remove_one_attachment),
                             )
                         }
                     }
@@ -592,7 +633,7 @@ fun AddPasswordScreen(
             Text(
                 text = errorMessage!!,
                 color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
 
@@ -618,7 +659,7 @@ fun AddPasswordScreen(
                 TextButton(onClick = { showNetworkFaviconDialog = false }) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
-            }
+            },
         )
     }
 }

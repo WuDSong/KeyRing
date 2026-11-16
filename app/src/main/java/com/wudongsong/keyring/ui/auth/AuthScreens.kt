@@ -1,6 +1,5 @@
-﻿package com.wudongsong.keyring.ui.auth
+package com.wudongsong.keyring.ui.auth
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,49 +29,54 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import coil.compose.AsyncImage
 import com.wudongsong.keyring.R
 import com.wudongsong.keyring.data.AppPreferences
 import com.wudongsong.keyring.data.BiometricPasswordVault
 import com.wudongsong.keyring.data.PasswordStore
+import com.wudongsong.keyring.ui.rememberPasswordAction
 
 @Composable
 fun SetPasswordScreen(
     passwordStore: PasswordStore,
     onSuccess: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val authAction = rememberPasswordAction {
+        errorMessage = context.getString(R.string.auth_error_generic)
+    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = stringResource(R.string.auth_set_title),
-            style = MaterialTheme.typography.headlineSmall
+            style = MaterialTheme.typography.headlineSmall,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.auth_set_subtitle),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(24.dp))
         OutlinedTextField(
@@ -84,10 +89,8 @@ fun SetPasswordScreen(
             label = { Text(stringResource(R.string.auth_password_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Next
-            )
+            keyboardOptions =
+                KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
         )
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
@@ -100,24 +103,21 @@ fun SetPasswordScreen(
             label = { Text(stringResource(R.string.auth_confirm_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { focusManager.clearFocus() }
-            )
+            keyboardOptions =
+                KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         )
         if (errorMessage != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = errorMessage!!,
                 color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
         Button(
+            enabled = !authAction.busy,
             onClick = {
                 when {
                     password.length < PasswordStore.MIN_PASSWORD_LENGTH ->
@@ -125,16 +125,21 @@ fun SetPasswordScreen(
                     password != confirm ->
                         errorMessage = context.getString(R.string.auth_error_mismatch)
                     else -> {
-                        passwordStore.setPassword(password).fold(
-                            onSuccess = { onSuccess() },
-                            onFailure = {
-                                errorMessage = context.getString(R.string.auth_error_generic)
-                            }
-                        )
+                        authAction.run {
+                            passwordStore
+                                .setPassword(password)
+                                .fold(
+                                    onSuccess = { onSuccess() },
+                                    onFailure = {
+                                        errorMessage =
+                                            context.getString(R.string.auth_error_generic)
+                                    },
+                                )
+                        }
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.auth_set_button))
         }
@@ -147,58 +152,58 @@ fun UnlockScreen(
     appPreferences: AppPreferences,
     biometricVault: BiometricPasswordVault,
     onSuccess: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val authAction = rememberPasswordAction {
+        errorMessage = context.getString(R.string.auth_error_generic)
+    }
     val activity = context as FragmentActivity
 
-    val biometricReady =
-        appPreferences.getBiometricUnlockEnabled() &&
-            biometricVault.hasStoredCipherText() &&
-            biometricVault.canEnrollStrongBiometric()
-
-    LaunchedEffect(Unit) {
-        if (appPreferences.getBiometricUnlockEnabled() &&
-            biometricVault.hasStoredCipherText() &&
-            biometricVault.canEnrollStrongBiometric()
-        ) {
-            biometricVault.authenticateDecryptPassword(activity) { result ->
-                result.onSuccess { plain ->
-                    if (passwordStore.verifyPassword(plain)) {
-                        onSuccess()
-                    }
-                }
+    var biometricReady by remember { mutableStateOf(false) }
+    val unlockWithBiometric: () -> Unit = {
+        authAction.run {
+            biometricVault.authenticateDecryptPassword(activity).onSuccess { plain ->
+                if (passwordStore.verifyPassword(plain)) onSuccess()
             }
         }
     }
+    LaunchedEffect(Unit) {
+        biometricReady =
+            appPreferences.getBiometricUnlockEnabled() &&
+                biometricVault.hasStoredCipherText() &&
+                biometricVault.canEnrollStrongBiometric()
+        if (biometricReady) unlockWithBiometric()
+    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(
-            painter = painterResource(R.drawable.app_logo),
+        AsyncImage(
+            model = R.drawable.app_logo,
             contentDescription = null,
-            modifier = Modifier.size(88.dp)
+            modifier = Modifier.size(88.dp),
         )
         Spacer(modifier = Modifier.height(20.dp))
         Text(
             text = stringResource(R.string.auth_unlock_title),
-            style = MaterialTheme.typography.headlineSmall
+            style = MaterialTheme.typography.headlineSmall,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.auth_unlock_subtitle),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(24.dp))
         OutlinedTextField(
@@ -212,55 +217,54 @@ fun UnlockScreen(
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center),
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    focusManager.clearFocus()
-                    if (passwordStore.verifyPassword(password)) {
-                        onSuccess()
-                    } else {
-                        errorMessage = context.getString(R.string.auth_error_wrong_password)
+            keyboardOptions =
+                KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions =
+                KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        authAction.run {
+                            if (passwordStore.verifyPassword(password)) {
+                                onSuccess()
+                            } else {
+                                errorMessage = context.getString(R.string.auth_error_wrong_password)
+                            }
+                        }
                     }
-                }
-            )
+                ),
         )
         if (errorMessage != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = errorMessage!!,
                 color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
         Button(
+            enabled = !authAction.busy,
             onClick = {
-                if (passwordStore.verifyPassword(password)) {
-                    onSuccess()
-                } else {
-                    errorMessage = context.getString(R.string.auth_error_wrong_password)
+                authAction.run {
+                    if (passwordStore.verifyPassword(password)) {
+                        onSuccess()
+                    } else {
+                        errorMessage = context.getString(R.string.auth_error_wrong_password)
+                    }
                 }
             },
-            modifier = Modifier.fillMaxWidth(0.82f)
+            modifier = Modifier.fillMaxWidth(0.82f),
         ) {
-            Text(stringResource(R.string.auth_unlock_button))
+            if (authAction.busy)
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            else Text(stringResource(R.string.auth_unlock_button))
         }
         if (biometricReady) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
-                onClick = {
-                    biometricVault.authenticateDecryptPassword(activity) { result ->
-                        result.onSuccess { plain ->
-                            if (passwordStore.verifyPassword(plain)) {
-                                onSuccess()
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(0.82f)
+                enabled = !authAction.busy,
+                onClick = unlockWithBiometric,
+                modifier = Modifier.fillMaxWidth(0.82f),
             ) {
                 Text(stringResource(R.string.auth_biometric_unlock))
             }

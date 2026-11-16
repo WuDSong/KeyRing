@@ -1,15 +1,26 @@
-﻿package com.wudongsong.keyring.data.local
+package com.wudongsong.keyring.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
+import com.wudongsong.keyring.data.ImportPlan
+import com.wudongsong.keyring.data.ImportPolicy
+import com.wudongsong.keyring.data.planImport
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PasswordEntryDao {
-    @Query("SELECT * FROM password_entries")
-    fun observeAll(): Flow<List<PasswordEntry>>
+    @Transaction
+    suspend fun importBackup(entries: List<PasswordEntry>, policy: ImportPolicy): ImportPlan {
+        val plan = planImport(getAllEntriesSync(), entries, policy)
+        insertAll(plan.inserts)
+        plan.updates.forEach { update(it) }
+        return plan
+    }
+
+    @Query("SELECT * FROM password_entries") fun observeAll(): Flow<List<PasswordEntry>>
 
     @Query(
         """
@@ -29,18 +40,13 @@ interface PasswordEntryDao {
     @Query("SELECT * FROM password_entries ORDER BY id ASC")
     suspend fun getAllEntriesSync(): List<PasswordEntry>
 
-    @Insert
-    suspend fun insert(entry: PasswordEntry): Long
+    @Insert suspend fun insert(entry: PasswordEntry): Long
 
-    @Insert
-    suspend fun insertAll(entries: List<PasswordEntry>)
+    @Insert suspend fun insertAll(entries: List<PasswordEntry>)
 
-    @Update
-    suspend fun update(entry: PasswordEntry)
+    @Update suspend fun update(entry: PasswordEntry)
 
-    @Query("DELETE FROM password_entries WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    @Query("DELETE FROM password_entries WHERE id = :id") suspend fun deleteById(id: Long)
 
-    @Query("SELECT COUNT(*) FROM password_entries")
-    fun observeEntryCount(): Flow<Int>
+    @Query("SELECT COUNT(*) FROM password_entries") fun observeEntryCount(): Flow<Int>
 }

@@ -1,4 +1,4 @@
-﻿package com.wudongsong.keyring.ui.home
+package com.wudongsong.keyring.ui.home
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -59,19 +59,22 @@ import kotlinx.coroutines.withContext
 fun SyncScreen(
     repository: PasswordEntryRepository,
     appPreferences: AppPreferences,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val dupPolicy by appPreferences.observeDuplicatePolicy().collectAsStateWithLifecycle(
-        initialValue = appPreferences.getDuplicatePolicy()
-    )
+    val dupPolicy by
+        appPreferences
+            .observeDuplicatePolicy()
+            .collectAsStateWithLifecycle(initialValue = appPreferences.getDuplicatePolicy())
 
     var deviceName by remember { mutableStateOf(appPreferences.getDeviceName()) }
     var receiverOn by remember { mutableStateOf(false) }
     var serverRunning by remember { mutableStateOf<SyncServer.Running?>(null) }
     var pairCode by remember { mutableStateOf<String?>(null) }
-    var nsdReg by remember { mutableStateOf<android.net.nsd.NsdManager.RegistrationListener?>(null) }
+    var nsdReg by remember {
+        mutableStateOf<android.net.nsd.NsdManager.RegistrationListener?>(null)
+    }
 
     val syncServer = remember { SyncServer(context.applicationContext, repository, appPreferences) }
     val syncClient = remember { SyncClient(appPreferences) }
@@ -95,20 +98,19 @@ fun SyncScreen(
     val discovered = remember { mutableStateMapOf<String, LanSyncNsd.ResolvedService>() }
 
     DisposableEffect(Unit) {
-        val discoveryListener = LanSyncNsd.startDiscovery(
-            context = context,
-            onResolved = { r ->
-                val key = "${r.host}:${r.port}"
-                discovered[key] = r
-            },
-            onLost = { name ->
-                val toRemove = discovered.filterValues { it.serviceName == name }.keys
-                toRemove.forEach { discovered.remove(it) }
-            }
-        )
-        onDispose {
-            LanSyncNsd.stopDiscovery(context, discoveryListener)
-        }
+        val discoveryListener =
+            LanSyncNsd.startDiscovery(
+                context = context,
+                onResolved = { r ->
+                    val key = "${r.host}:${r.port}"
+                    discovered[key] = r
+                },
+                onLost = { name ->
+                    val toRemove = discovered.filterValues { it.serviceName == name }.keys
+                    toRemove.forEach { discovered.remove(it) }
+                },
+            )
+        onDispose { LanSyncNsd.stopDiscovery(context, discoveryListener) }
     }
 
     fun baseUrl(host: String): String {
@@ -133,11 +135,7 @@ fun SyncScreen(
         val running = syncServer.start()
         serverRunning = running
         val label = "KeyRing-${deviceName.ifBlank { "device" }}"
-        nsdReg = LanSyncNsd.register(
-            context = context,
-            port = running.port,
-            serviceLabel = label
-        )
+        nsdReg = LanSyncNsd.register(context = context, port = running.port, serviceLabel = label)
         receiverOn = true
     }
 
@@ -147,13 +145,13 @@ fun SyncScreen(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Text(
                 text = stringResource(R.string.sync_intro),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -162,7 +160,7 @@ fun SyncScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = stringResource(R.string.sync_section_device),
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -171,18 +169,19 @@ fun SyncScreen(
                         label = { Text(stringResource(R.string.sync_device_name_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        enabled = !busy
+                        enabled = !busy,
                     )
                     TextButton(
                         onClick = {
                             appPreferences.setDeviceName(deviceName)
                             Toast.makeText(
-                                context,
-                                context.getString(R.string.sync_device_name_saved),
-                                Toast.LENGTH_SHORT
-                            ).show()
+                                    context,
+                                    context.getString(R.string.sync_device_name_saved),
+                                    Toast.LENGTH_SHORT,
+                                )
+                                .show()
                         },
-                        enabled = !busy
+                        enabled = !busy,
                     ) {
                         Text(stringResource(R.string.sync_device_name_save))
                     }
@@ -196,36 +195,34 @@ fun SyncScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.sync_receiver_title),
-                                style = MaterialTheme.typography.titleSmall
+                                style = MaterialTheme.typography.titleSmall,
                             )
                             Text(
                                 text = stringResource(R.string.sync_receiver_summary),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Switch(
                             checked = receiverOn,
-                            onCheckedChange = { on ->
-                                if (on) startReceiver() else stopReceiver()
-                            },
-                            enabled = !busy
+                            onCheckedChange = { on -> if (on) startReceiver() else stopReceiver() },
+                            enabled = !busy,
                         )
                     }
                     if (receiverOn && pairCode != null) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = stringResource(R.string.sync_pair_code_show, pairCode!!),
-                            style = MaterialTheme.typography.headlineSmall
+                            style = MaterialTheme.typography.headlineSmall,
                         )
                         Text(
                             text = stringResource(R.string.sync_port_hint, SyncServer.DEFAULT_PORT),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
@@ -237,7 +234,7 @@ fun SyncScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = stringResource(R.string.sync_client_pair_title),
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -248,7 +245,7 @@ fun SyncScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !busy,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -258,16 +255,20 @@ fun SyncScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !busy,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                     )
                     Button(
                         onClick = {
-                            if (manualHost.isBlank() || pairCodeInput.length < 4) {
+                            if (
+                                manualHost.isBlank() ||
+                                    !PairingEngine.isValidPairCode(pairCodeInput)
+                            ) {
                                 Toast.makeText(
-                                    context,
-                                    context.getString(R.string.sync_pair_invalid),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        context,
+                                        context.getString(R.string.sync_pair_invalid),
+                                        Toast.LENGTH_SHORT,
+                                    )
+                                    .show()
                                 return@Button
                             }
                             scope.launch(Dispatchers.IO) {
@@ -278,44 +279,52 @@ fun SyncScreen(
                                 try {
                                     val salt = PairingEngine.newSaltB64()
                                     val base = baseUrl(manualHost)
-                                    val hello = syncClient.pairHello(
-                                        baseUrl = base,
-                                        clientName = appPreferences.getDeviceName(),
-                                        clientSaltB64 = salt
-                                    )
-                                    val ok = syncClient.pairConfirm(
-                                        baseUrl = base,
-                                        remoteServerDeviceId = hello.serverDeviceId,
-                                        remoteServerName = hello.serverName,
-                                        pairCode = pairCodeInput.trim(),
-                                        serverSaltB64 = hello.serverSaltB64,
-                                        clientSaltB64 = salt
-                                    )
+                                    val hello =
+                                        syncClient.pairHello(
+                                            baseUrl = base,
+                                            clientName = appPreferences.getDeviceName(),
+                                            clientSaltB64 = salt,
+                                        )
+                                    val ok =
+                                        syncClient.pairConfirm(
+                                            baseUrl = base,
+                                            remoteServerDeviceId = hello.serverDeviceId,
+                                            remoteServerName = hello.serverName,
+                                            pairCode = pairCodeInput.trim(),
+                                            serverSaltB64 = hello.serverSaltB64,
+                                            clientSaltB64 = salt,
+                                        )
                                     withContext(Dispatchers.Main) {
                                         if (ok) {
                                             Toast.makeText(
-                                                context,
-                                                context.getString(R.string.sync_pair_success),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                                    context,
+                                                    context.getString(R.string.sync_pair_success),
+                                                    Toast.LENGTH_SHORT,
+                                                )
+                                                .show()
                                             selectedRemoteId = hello.serverDeviceId
                                             trustedVersion++
                                         } else {
                                             Toast.makeText(
-                                                context,
-                                                context.getString(R.string.sync_pair_failed),
-                                                Toast.LENGTH_LONG
-                                            ).show()
+                                                    context,
+                                                    context.getString(R.string.sync_pair_failed),
+                                                    Toast.LENGTH_LONG,
+                                                )
+                                                .show()
                                         }
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
                                         lastError = e.message
                                         Toast.makeText(
-                                            context,
-                                            context.getString(R.string.sync_error_fmt, e.message ?: ""),
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                                context,
+                                                context.getString(
+                                                    R.string.sync_error_fmt,
+                                                    e.message ?: "",
+                                                ),
+                                                Toast.LENGTH_LONG,
+                                            )
+                                            .show()
                                     }
                                 } finally {
                                     withContext(Dispatchers.Main) { busy = false }
@@ -323,14 +332,12 @@ fun SyncScreen(
                             }
                         },
                         enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (busy) {
                             CircularProgressIndicator(
-                                modifier = Modifier
-                                    .height(22.dp)
-                                    .padding(end = 8.dp),
-                                strokeWidth = 2.dp
+                                modifier = Modifier.height(22.dp).padding(end = 8.dp),
+                                strokeWidth = 2.dp,
                             )
                         }
                         Icon(Icons.Filled.Sync, contentDescription = null)
@@ -344,7 +351,7 @@ fun SyncScreen(
         item {
             Text(
                 text = stringResource(R.string.sync_discovered_title),
-                style = MaterialTheme.typography.titleSmall
+                style = MaterialTheme.typography.titleSmall,
             )
         }
         if (discovered.isEmpty()) {
@@ -352,19 +359,15 @@ fun SyncScreen(
                 Text(
                     text = stringResource(R.string.sync_discovered_empty),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
             items(discovered.values.toList(), key = { "${it.host}:${it.port}" }) { s ->
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { manualHost = s.host }
-                ) {
+                OutlinedCard(modifier = Modifier.fillMaxWidth().clickable { manualHost = s.host }) {
                     Row(
                         modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.Filled.Sync, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -373,7 +376,7 @@ fun SyncScreen(
                             Text(
                                 "${s.host}:${s.port}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -386,20 +389,24 @@ fun SyncScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = stringResource(R.string.sync_dup_policy_current),
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = when (dupPolicy) {
-                            AppPreferences.DuplicatePolicy.SKIP -> stringResource(R.string.settings_sync_dup_skip)
-                            AppPreferences.DuplicatePolicy.OVERWRITE_NEWER -> stringResource(R.string.settings_sync_dup_overwrite)
-                            AppPreferences.DuplicatePolicy.KEEP_BOTH -> stringResource(R.string.settings_sync_dup_keep_both)
-                        },
-                        style = MaterialTheme.typography.bodyMedium
+                        text =
+                            when (dupPolicy) {
+                                AppPreferences.DuplicatePolicy.SKIP ->
+                                    stringResource(R.string.settings_sync_dup_skip)
+                                AppPreferences.DuplicatePolicy.OVERWRITE_NEWER ->
+                                    stringResource(R.string.settings_sync_dup_overwrite)
+                                AppPreferences.DuplicatePolicy.KEEP_BOTH ->
+                                    stringResource(R.string.settings_sync_dup_keep_both)
+                            },
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         text = stringResource(R.string.sync_dup_policy_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -410,28 +417,26 @@ fun SyncScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = stringResource(R.string.sync_trusted_title),
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
                     )
                     if (trusted.isEmpty()) {
                         Text(
                             text = stringResource(R.string.sync_no_trusted),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     } else {
                         trusted.forEach { t ->
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(t.name, style = MaterialTheme.typography.bodyLarge)
                                     Text(
                                         t.deviceId,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 TextButton(
@@ -440,7 +445,7 @@ fun SyncScreen(
                                         if (selectedRemoteId == t.deviceId) selectedRemoteId = null
                                         trustedVersion++
                                     },
-                                    enabled = !busy
+                                    enabled = !busy,
                                 ) {
                                     Text(stringResource(R.string.sync_remove_trust))
                                 }
@@ -451,7 +456,7 @@ fun SyncScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = stringResource(R.string.sync_select_remote_hint),
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
                     )
                     OutlinedTextField(
                         value = selectedRemoteId.orEmpty(),
@@ -459,17 +464,18 @@ fun SyncScreen(
                         label = { Text(stringResource(R.string.sync_remote_device_id_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        enabled = !busy
+                        enabled = !busy,
                     )
                     Button(
                         onClick = {
                             val rid = selectedRemoteId?.trim().orEmpty()
                             if (rid.isEmpty() || manualHost.isBlank()) {
                                 Toast.makeText(
-                                    context,
-                                    context.getString(R.string.sync_sync_invalid),
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        context,
+                                        context.getString(R.string.sync_sync_invalid),
+                                        Toast.LENGTH_SHORT,
+                                    )
+                                    .show()
                                 return@Button
                             }
                             scope.launch(Dispatchers.IO) {
@@ -481,26 +487,38 @@ fun SyncScreen(
                                     val base = baseUrl(manualHost)
                                     val bytes = syncClient.pullArchive(base, rid)
                                     val parsed = SyncArchive.parseZipBytes(context, bytes)
-                                    val pull = repository.mergeSyncArchive(parsed, appPreferences.getDuplicatePolicy())
-                                    val localBytes = SyncArchive.exportZipBytes(repository.getAllEntriesUnsorted())
+                                    val pull =
+                                        repository.mergeSyncArchive(
+                                            parsed,
+                                            appPreferences.getDuplicatePolicy(),
+                                        )
+                                    val localBytes =
+                                        SyncArchive.exportZipBytes(
+                                            repository.getAllEntriesUnsorted()
+                                        )
                                     val push = syncClient.pushArchive(base, rid, localBytes)
                                     withContext(Dispatchers.Main) {
                                         lastPullStats = pull
                                         lastPushStats = push
                                         Toast.makeText(
-                                            context,
-                                            context.getString(R.string.sync_sync_done),
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                                context,
+                                                context.getString(R.string.sync_sync_done),
+                                                Toast.LENGTH_SHORT,
+                                            )
+                                            .show()
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
                                         lastError = e.message
                                         Toast.makeText(
-                                            context,
-                                            context.getString(R.string.sync_error_fmt, e.message ?: ""),
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                                context,
+                                                context.getString(
+                                                    R.string.sync_error_fmt,
+                                                    e.message ?: "",
+                                                ),
+                                                Toast.LENGTH_LONG,
+                                            )
+                                            .show()
                                     }
                                 } finally {
                                     withContext(Dispatchers.Main) { busy = false }
@@ -508,7 +526,7 @@ fun SyncScreen(
                             }
                         },
                         enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.sync_bidirectional_button))
                     }
@@ -522,7 +540,7 @@ fun SyncScreen(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
                             text = stringResource(R.string.sync_last_result),
-                            style = MaterialTheme.typography.titleSmall
+                            style = MaterialTheme.typography.titleSmall,
                         )
                         lastPullStats?.let {
                             Text(
@@ -531,7 +549,7 @@ fun SyncScreen(
                                     it.inserted,
                                     it.updated,
                                     it.skipped,
-                                    it.duplicatedAsCopy
+                                    it.duplicatedAsCopy,
                                 )
                             )
                         }
@@ -542,7 +560,7 @@ fun SyncScreen(
                                     it.inserted,
                                     it.updated,
                                     it.skipped,
-                                    it.duplicatedAsCopy
+                                    it.duplicatedAsCopy,
                                 )
                             )
                         }

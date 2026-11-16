@@ -1,5 +1,6 @@
-﻿package com.wudongsong.keyring.ui.entries
+package com.wudongsong.keyring.ui.entries
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,14 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.widget.Toast
 import coil.compose.AsyncImage
 import com.wudongsong.keyring.R
 import com.wudongsong.keyring.data.PasswordEntryRepository
@@ -60,12 +58,13 @@ fun PasswordEntryDetailScreen(
     entryId: Long,
     repository: PasswordEntryRepository,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val entries by repository.observeEntries().collectAsStateWithLifecycle(initialValue = emptyList())
+    val entries by
+        repository.observeEntries().collectAsStateWithLifecycle(initialValue = emptyList())
     val entry = entries.find { it.id == entryId }
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
+    val app = context.applicationContext as com.wudongsong.keyring.MyPasswordsApplication
 
     LaunchedEffect(entries, entryId) {
         if (entries.isNotEmpty() && entries.none { it.id == entryId }) {
@@ -75,18 +74,12 @@ fun PasswordEntryDetailScreen(
 
     when {
         entries.isEmpty() -> {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         }
         entry == null -> {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         }
@@ -95,13 +88,18 @@ fun PasswordEntryDetailScreen(
                 entry = entry,
                 modifier = modifier,
                 onCopy = { label, text ->
-                    clipboard.setText(AnnotatedString(text))
+                    app.sensitiveClipboard.copy(
+                        label,
+                        text,
+                        app.appPreferences.getClipboardAutoClearEnabled(),
+                    )
                     Toast.makeText(
-                        context,
-                        context.getString(R.string.detail_copied_toast, label),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                            context,
+                            context.getString(R.string.detail_copied_toast, label),
+                            Toast.LENGTH_SHORT,
+                        )
+                        .show()
+                },
             )
         }
     }
@@ -112,29 +110,30 @@ fun PasswordEntryDetailScreen(
 private fun PasswordEntryDetailContent(
     entry: PasswordEntry,
     onCopy: (label: String, text: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scroll = rememberScrollState()
     var zoomFile by remember { mutableStateOf<File?>(null) }
 
     Column(
-        modifier = modifier
-            .verticalScroll(scroll)
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+        modifier =
+            modifier
+                .verticalScroll(scroll)
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
     ) {
         TitleAvatarSection(
             title = entry.title,
             avatarImagePath = entry.avatarImagePath,
             onEditAvatarClick = {},
-            showEditBadge = false
+            showEditBadge = false,
         )
         Text(
             text = entry.title,
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(8.dp))
         SelectionContainer {
@@ -142,7 +141,7 @@ private fun PasswordEntryDetailContent(
                 text = entry.description,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
@@ -151,7 +150,7 @@ private fun PasswordEntryDetailContent(
             Text(
                 text = stringResource(R.string.field_detailed_description),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(4.dp))
             SelectionContainer {
@@ -159,7 +158,7 @@ private fun PasswordEntryDetailContent(
                     text = entry.detailedDescription,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -170,28 +169,25 @@ private fun PasswordEntryDetailContent(
         DetailCopyableSection(
             label = stringResource(R.string.field_account_name),
             value = entry.accountName,
-            onCopy = onCopy
+            onCopy = onCopy,
         )
         DetailCopyableSection(
             label = stringResource(R.string.field_username),
             value = entry.username,
-            onCopy = onCopy
+            onCopy = onCopy,
         )
         DetailCopyableSection(
             label = stringResource(R.string.field_password),
             value = entry.password,
             onCopy = onCopy,
-            isPasswordField = true
+            isPasswordField = true,
         )
         DetailCopyableSection(
             label = stringResource(R.string.field_url),
             value = entry.url,
-            onCopy = onCopy
+            onCopy = onCopy,
         )
-        DetailTagsSection(
-            tagsRaw = entry.tags,
-            onCopy = onCopy
-        )
+        DetailTagsSection(tagsRaw = entry.tags, onCopy = onCopy)
 
         val attachmentPaths = entry.allAttachmentPaths().filter { File(it).exists() }
         if (attachmentPaths.isNotEmpty()) {
@@ -201,7 +197,7 @@ private fun PasswordEntryDetailContent(
             Text(
                 text = stringResource(R.string.detail_attachment_title),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             attachmentPaths.forEach { path ->
@@ -211,10 +207,7 @@ private fun PasswordEntryDetailContent(
                     model = file,
                     contentDescription = stringResource(R.string.add_image_preview_desc),
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clickable { zoomFile = file }
+                    modifier = Modifier.fillMaxWidth().height(200.dp).clickable { zoomFile = file },
                 )
             }
         }
@@ -227,15 +220,16 @@ private fun PasswordEntryDetailContent(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(
-                R.string.detail_last_updated_line,
-                DateTimeFormatters.formatDateTime(entry.updatedAt),
-                RelativeTimeFormatter.formatPast(context, entry.updatedAt)
-            ),
+            text =
+                stringResource(
+                    R.string.detail_last_updated_line,
+                    DateTimeFormatters.formatDateTime(entry.updatedAt),
+                    RelativeTimeFormatter.formatPast(context, entry.updatedAt),
+                ),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -246,7 +240,7 @@ private fun DetailCopyableSection(
     label: String,
     value: String,
     onCopy: (label: String, text: String) -> Unit,
-    isPasswordField: Boolean = false
+    isPasswordField: Boolean = false,
 ) {
     if (value.isBlank()) return
 
@@ -261,42 +255,42 @@ private fun DetailCopyableSection(
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // \u5de6\u4fa7\uff1a\u6807\u7b7e
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.widthIn(max = 80.dp)
+                modifier = Modifier.widthIn(max = 80.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             // \u4e2d\u95f4\uff1a\u503c
             Text(
                 text = displayText,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             // \u53f3\u4fa7\uff1a\u64cd\u4f5c\u6309\u94ae
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isPasswordField) {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
-                            imageVector = if (passwordVisible) {
-                                Icons.Filled.VisibilityOff
-                            } else {
-                                Icons.Filled.Visibility
-                            },
-                            contentDescription = stringResource(
+                            imageVector =
                                 if (passwordVisible) {
-                                    R.string.detail_hide_password_desc
+                                    Icons.Filled.VisibilityOff
                                 } else {
-                                    R.string.detail_show_password_desc
-                                }
-                            )
+                                    Icons.Filled.Visibility
+                                },
+                            contentDescription =
+                                stringResource(
+                                    if (passwordVisible) {
+                                        R.string.detail_hide_password_desc
+                                    } else {
+                                        R.string.detail_show_password_desc
+                                    }
+                                ),
                         )
                     }
                 }
@@ -313,10 +307,7 @@ private fun parseTagList(tagsRaw: String): List<String> =
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DetailTagsSection(
-    tagsRaw: String,
-    onCopy: (label: String, text: String) -> Unit
-) {
+private fun DetailTagsSection(tagsRaw: String, onCopy: (label: String, text: String) -> Unit) {
     if (tagsRaw.isBlank()) return
 
     val tags = parseTagList(tagsRaw)
@@ -327,38 +318,30 @@ private fun DetailTagsSection(
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = tagsLabel,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     tags.forEach { tag ->
-                        AssistChip(
-                            onClick = { },
-                            label = { Text(tag) },
-                            enabled = false
-                        )
+                        AssistChip(onClick = {}, label = { Text(tag) }, enabled = false)
                     }
                 }
             }
-            TextButton(
-                onClick = { onCopy(tagsLabel, tagsRaw.trim()) }
-            ) {
+            TextButton(onClick = { onCopy(tagsLabel, tagsRaw.trim()) }) {
                 Text(stringResource(R.string.action_copy))
             }
         }

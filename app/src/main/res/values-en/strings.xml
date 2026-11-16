@@ -85,7 +85,7 @@
     <string name="about_section_disclaimer">Disclaimer</string>
     <string name="about_section_copyright">Copyright</string>
     <string name="about_version_line">Version %1$s</string>
-    <string name="about_opensource_last_updated">Open-source list last updated: 2026-03-22</string>
+    <string name="about_opensource_last_updated">Open-source list last updated: 2026-11-16</string>
     <string name="about_developer_avatar_desc">Developer avatar</string>
     <string name="about_copyright_line">© %1$d %2$s. All rights reserved.</string>
     <string name="about_copyright_notice">Without prior written permission, no individual or organization may copy, modify, distribute, publish, sell, rent, sublicense, reverse engineer, decompile, or otherwise attempt to obtain source code of this app, except where explicitly allowed by law.</string>
@@ -124,7 +124,7 @@
     <string name="sync_device_name_saved">Saved</string>
     <string name="sync_receiver_title">Receive sync (local as receiver)</string>
     <string name="sync_receiver_summary">When enabled, starts service and broadcasts locally for discovery and connection.</string>
-    <string name="sync_pair_code_show">Pairing code: %1$s</string>
+    <string name="sync_pair_code_show">One-time pairing code (valid for 5 minutes): %1$s</string>
     <string name="sync_port_hint">Service port: %1$d (ensure consistent with manual IP input)</string>
     <string name="sync_client_pair_title">Pair with peer (local as initiator)</string>
     <string name="sync_manual_ip_label">Peer device IP address</string>
@@ -150,4 +150,28 @@
     <string name="sync_stats_pull_fmt">Local merge (pull): added %1$d, updated %2$d, skipped %3$d, duplicates %4$d</string>
     <string name="sync_stats_push_fmt">Peer merge (push): added %1$d, updated %2$d, skipped %3$d, duplicates %4$d</string>
     <string name="sync_error_fmt">Error: %1$s</string>
+    <string name="backup_encrypt_title">Export encrypted backup</string>
+    <string name="backup_decrypt_title">Import backup</string>
+    <string name="backup_encrypt_description">Choose a separate backup password of at least 8 characters and keep it safe. Recovery requires this password. Changing the app password does not change existing backups.</string>
+    <string name="backup_decrypt_description">Enter the password chosen when exporting. Leave blank for legacy unencrypted ZIP or JSON backups.</string>
+    <string name="backup_password_label">Backup password</string>
+    <string name="backup_encrypt_failed">Export failed. Check storage space and file permissions, then retry.</string>
+    <string name="backup_decrypt_failed">Import failed: incorrect password, damaged or unsupported backup, or size limit exceeded.</string>
+    <string name="database_open_failed">Cannot open the encrypted database. Existing data has not been reset. Retry or restore from a backup.</string>
+    <string name="database_retry">Retry</string>
+    <string name="editor_load_failed">Cannot load this entry. Go back and retry.</string>
+    <string name="editor_save_failed">Save failed. Your changes are retained; please retry.</string>
+    <string name="editor_discard_title">Discard unsaved changes?</string>
+    <string name="editor_discard_message">Going back discards these changes. The original entry and images are preserved.</string>
+    <string name="editor_discard">Discard changes</string>
+    <string name="editor_keep_editing">Keep editing</string>
+    <string name="import_preview_title">Review backup import</string>
+    <string name="import_preview_counts">Add %1$d, update %2$d, skip %3$d</string>
+    <string name="import_policy_skip">Skip duplicates (default)</string>
+    <string name="import_policy_newer">Replace only with newer entries</string>
+    <string name="import_policy_both">Keep both</string>
+    <string name="screen_protection_title">Protect screen contents</string>
+    <string name="screen_protection_summary">Block screenshots and recording, and hide the recent-app preview.</string>
+    <string name="clipboard_clear_title">Automatically clear copied contents</string>
+    <string name="clipboard_clear_summary">Clear after 30 seconds, or on return if background access is restricted. Later clipboard contents are preserved.</string>
 </resources>

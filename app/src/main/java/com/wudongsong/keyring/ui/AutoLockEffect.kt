@@ -9,9 +9,6 @@ import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -30,42 +27,18 @@ fun AutoLockEffect(
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
-    var isLaunchingActivity by remember { mutableStateOf(false) }
+    val externalActivity = LocalExternalActivityState.current
+    val currentOnLock by androidx.compose.runtime.rememberUpdatedState(onLock)
 
-    // 监听Activity启动事件，用于检测是否是因为选择图片等操作而进入后台
-    DisposableEffect(context) {
-        val activityLifecycleCallbacks = object : android.app.Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
-            override fun onActivityStarted(activity: Activity) {}
-            override fun onActivityResumed(activity: Activity) {
-                isLaunchingActivity = false
-            }
-            override fun onActivityPaused(activity: Activity) {
-                // 当应用暂停时，检查是否是因为启动了其他Activity（如图片选择器）
-                isLaunchingActivity = true
-            }
-            override fun onActivityStopped(activity: Activity) {}
-            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
-            override fun onActivityDestroyed(activity: Activity) {}
-        }
-
-        val application = context.applicationContext as android.app.Application
-        application.registerActivityLifecycleCallbacks(activityLifecycleCallbacks)
-
-        onDispose {
-            application.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks)
-        }
-    }
-
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, context, appPreferences, externalActivity) {
         val observer = LifecycleEventObserver { _, event ->
             if (event != Lifecycle.Event.ON_STOP) return@LifecycleEventObserver
             if (!appPreferences.getAutoLockEnabled()) return@LifecycleEventObserver
             val activity = context as? Activity ?: return@LifecycleEventObserver
             if (activity.isChangingConfigurations) return@LifecycleEventObserver
             // 如果是因为启动其他Activity（如图片选择器）而进入后台，则不触发锁定
-            if (isLaunchingActivity) return@LifecycleEventObserver
-            onLock()
+            if (externalActivity.pending) return@LifecycleEventObserver
+            currentOnLock()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -77,7 +50,7 @@ fun AutoLockEffect(
                 if (intent?.action != Intent.ACTION_SCREEN_OFF) return
                 if (!appPreferences.getAutoLockEnabled()) return
                 // 熄屏时仍然触发锁定
-                onLock()
+                currentOnLock()
             }
         }
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
