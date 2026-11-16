@@ -7,6 +7,10 @@ import com.wudongsong.keyring.data.PasswordEntryRepository
 import com.wudongsong.keyring.data.local.AppDatabase
 
 class MyPasswordsApplication : Application() {
+    val backgroundScope =
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+        )
     val sensitiveClipboard by lazy { com.wudongsong.keyring.util.SensitiveClipboard(this) }
     val database: AppDatabase by lazy { AppDatabase.getInstance(this) }
     val appPreferences: AppPreferences by lazy { AppPreferences(this) }

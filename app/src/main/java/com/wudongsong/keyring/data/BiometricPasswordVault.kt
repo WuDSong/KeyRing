@@ -9,7 +9,10 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.wudongsong.keyring.security.BiometricCredential
+import com.wudongsong.keyring.util.UnlockTimings
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -76,7 +79,7 @@ class BiometricPasswordVault(private val context: Context) {
     suspend fun enrollEncryptPassword(
         activity: FragmentActivity,
         plainPassword: String,
-    ): Result<Unit> {
+    ): Result<String> {
         val prepared =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -114,11 +117,14 @@ class BiometricPasswordVault(private val context: Context) {
                 ) {
                     "Cannot save biometric vault"
                 }
+                ciphertextId(unlockedCipher.iv, encrypted)
             }
         }
     }
 
-    suspend fun authenticateDecryptPassword(activity: FragmentActivity): Result<String> {
+    suspend fun authenticateDecryptPassword(
+        activity: FragmentActivity
+    ): Result<BiometricCredential> {
         val prepared =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -138,10 +144,10 @@ class BiometricPasswordVault(private val context: Context) {
                     val key = ks.getKey(KEY_ALIAS, null) as? SecretKey ?: error("missing_key")
                     Cipher.getInstance("AES/GCM/NoPadding").apply {
                         init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-                    } to enc
+                    } to (enc to ciphertextId(iv, enc))
                 }
             }
-        val (cipher, encrypted) =
+        val (cipher, payload) =
             prepared.getOrElse {
                 return Result.failure(it)
             }
@@ -156,9 +162,22 @@ class BiometricPasswordVault(private val context: Context) {
                 return Result.failure(it)
             }
         return withContext(Dispatchers.IO) {
-            runCatching { unlockedCipher.doFinal(encrypted).toString(Charsets.UTF_8) }
+            runCatching {
+                UnlockTimings.measure(appContext, "biometric decrypt") {
+                    BiometricCredential(
+                        unlockedCipher.doFinal(payload.first).toString(Charsets.UTF_8),
+                        payload.second,
+                    )
+                }
+            }
         }
     }
+
+    private fun ciphertextId(iv: ByteArray, encrypted: ByteArray): String =
+        Base64.encodeToString(
+            MessageDigest.getInstance("SHA-256").digest(iv + encrypted),
+            Base64.NO_WRAP,
+        )
 
     private suspend fun authenticate(
         activity: FragmentActivity,
@@ -175,6 +194,7 @@ class BiometricPasswordVault(private val context: Context) {
                             override fun onAuthenticationSucceeded(
                                 result: BiometricPrompt.AuthenticationResult
                             ) {
+                                UnlockTimings.event(appContext, "biometric authenticated")
                                 if (continuation.isActive)
                                     continuation.resume(
                                         result.cryptoObject?.cipher?.let { Result.success(it) }

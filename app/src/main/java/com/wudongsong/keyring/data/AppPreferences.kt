@@ -5,10 +5,13 @@ import android.content.SharedPreferences
 import android.util.Base64
 import java.util.UUID
 import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -319,6 +322,7 @@ class AppPreferences(context: Context) {
         /** 32 bytes AES key, base64 */
         val sharedKeyB64: String,
         val pairedAt: Long,
+        val lastHost: String? = null,
     )
 
     fun getTrustedDevices(): List<TrustedDevice> {
@@ -331,7 +335,8 @@ class AppPreferences(context: Context) {
     fun upsertTrustedDevice(device: TrustedDevice) {
         val list = getTrustedDevices().toMutableList()
         val idx = list.indexOfFirst { it.deviceId == device.deviceId }
-        if (idx >= 0) list[idx] = device else list.add(device)
+        if (idx >= 0) list[idx] = device.copy(lastHost = device.lastHost ?: list[idx].lastHost)
+        else list.add(device)
         check(securePrefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(list)).commit())
     }
 
@@ -339,6 +344,27 @@ class AppPreferences(context: Context) {
     fun removeTrustedDevice(deviceId: String) {
         val next = getTrustedDevices().filterNot { it.deviceId == deviceId }
         check(securePrefs.edit().putString(KEY_TRUSTED_DEVICES, json.encodeToString(next)).commit())
+    }
+
+    fun observeTrustedDevices(): Flow<List<TrustedDevice>> =
+        callbackFlow<Unit> {
+                val secure = securePrefs
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_TRUSTED_DEVICES) trySend(Unit)
+                    }
+                secure.registerOnSharedPreferenceChangeListener(listener)
+                trySend(Unit)
+                awaitClose { secure.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            .map { getTrustedDevices() }
+            .flowOn(Dispatchers.IO)
+
+    @Synchronized
+    fun rememberTrustedHost(deviceId: String, host: String) {
+        getTrustedDevices()
+            .find { it.deviceId == deviceId }
+            ?.let { upsertTrustedDevice(it.copy(lastHost = host.trim())) }
     }
 
     fun trustedDeviceKey(deviceId: String): ByteArray? {

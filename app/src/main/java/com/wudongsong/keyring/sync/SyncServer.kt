@@ -74,6 +74,8 @@ class SyncServer(
         val createdAt: Long = System.currentTimeMillis(),
     )
 
+    fun isPairingAvailable(): Boolean = activePairCode() != null
+
     fun start(port: Int = DEFAULT_PORT): Running {
         val server =
             embeddedServer(CIO, host = "0.0.0.0", port = port) {

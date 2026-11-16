@@ -166,8 +166,11 @@ fun UnlockScreen(
     var biometricReady by remember { mutableStateOf(false) }
     val unlockWithBiometric: () -> Unit = {
         authAction.run {
-            biometricVault.authenticateDecryptPassword(activity).onSuccess { plain ->
-                if (passwordStore.verifyPassword(plain)) onSuccess()
+            biometricVault.authenticateDecryptPassword(activity).onSuccess { credential ->
+                if (passwordStore.verifyBiometricCredential(credential)) {
+                    com.wudongsong.keyring.util.UnlockTimings.event(context, "entering home")
+                    onSuccess()
+                } else errorMessage = context.getString(R.string.biometric_reverify_required)
             }
         }
     }

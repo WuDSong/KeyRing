@@ -458,7 +458,8 @@ fun SettingsScreen(
                     onClick = {
                         authAction.run {
                             val pwd = enrollPassword
-                            if (!passwordStore.verifyPassword(pwd)) {
+                            val verifiedRecord = passwordStore.verifyForBiometricEnrollment(pwd)
+                            if (verifiedRecord == null) {
                                 enrollPasswordError =
                                     context.getString(R.string.auth_error_wrong_password)
                                 return@run
@@ -469,7 +470,15 @@ fun SettingsScreen(
                             biometricVault
                                 .enrollEncryptPassword(activity, pwd)
                                 .fold(
-                                    onSuccess = {
+                                    onSuccess = { ciphertextId ->
+                                        check(
+                                            passwordStore.bindBiometricCredential(
+                                                ciphertextId,
+                                                verifiedRecord,
+                                            )
+                                        ) {
+                                            "Master password changed during enrollment"
+                                        }
                                         appPreferences.setBiometricUnlockEnabled(true)
                                         Toast.makeText(
                                                 context,

@@ -35,6 +35,9 @@ interface PasswordEntryDao {
     fun searchEntriesLike(q: String): Flow<List<PasswordEntry>>
 
     @Query("SELECT * FROM password_entries WHERE id = :id LIMIT 1")
+    fun observeById(id: Long): Flow<PasswordEntry?>
+
+    @Query("SELECT * FROM password_entries WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): PasswordEntry?
 
     @Query("SELECT * FROM password_entries ORDER BY id ASC")

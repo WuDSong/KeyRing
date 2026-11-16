@@ -2,46 +2,25 @@ package com.wudongsong.keyring.ui.entries
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -49,9 +28,13 @@ import com.wudongsong.keyring.R
 import com.wudongsong.keyring.data.PasswordEntryRepository
 import com.wudongsong.keyring.data.local.PasswordEntry
 import com.wudongsong.keyring.data.local.allAttachmentPaths
+import com.wudongsong.keyring.ui.theme.MyPasswordsTheme
 import com.wudongsong.keyring.util.DateTimeFormatters
 import com.wudongsong.keyring.util.RelativeTimeFormatter
 import java.io.File
+import kotlinx.coroutines.flow.map
+
+private data class DetailState(val loaded: Boolean = false, val entry: PasswordEntry? = null)
 
 @Composable
 fun PasswordEntryDetailScreen(
@@ -60,290 +43,359 @@ fun PasswordEntryDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val entries by
-        repository.observeEntries().collectAsStateWithLifecycle(initialValue = emptyList())
-    val entry = entries.find { it.id == entryId }
+    val state by
+        remember(entryId, repository) {
+                repository.observeEntry(entryId).map { DetailState(true, it) }
+            }
+            .collectAsStateWithLifecycle(initialValue = DetailState())
     val context = LocalContext.current
     val app = context.applicationContext as com.wudongsong.keyring.MyPasswordsApplication
-
-    LaunchedEffect(entries, entryId) {
-        if (entries.isNotEmpty() && entries.none { it.id == entryId }) {
-            onBack()
-        }
+    LaunchedEffect(state.loaded, state.entry?.id) {
+        if (state.loaded && state.entry == null) onBack()
     }
-
-    when {
-        entries.isEmpty() -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+    val entry = state.entry
+    if (entry == null)
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
         }
-        entry == null -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        }
-        else -> {
-            PasswordEntryDetailContent(
-                entry = entry,
-                modifier = modifier,
-                onCopy = { label, text ->
-                    app.sensitiveClipboard.copy(
-                        label,
-                        text,
-                        app.appPreferences.getClipboardAutoClearEnabled(),
+    else
+        PasswordEntryDetailContent(
+            entry,
+            onCopy = { label, text ->
+                app.sensitiveClipboard.copy(
+                    label,
+                    text,
+                    app.appPreferences.getClipboardAutoClearEnabled(),
+                )
+                Toast.makeText(
+                        context,
+                        context.getString(R.string.detail_copied_toast, label),
+                        Toast.LENGTH_SHORT,
                     )
-                    Toast.makeText(
-                            context,
-                            context.getString(R.string.detail_copied_toast, label),
-                            Toast.LENGTH_SHORT,
-                        )
-                        .show()
-                },
-            )
-        }
-    }
+                    .show()
+            },
+            modifier = modifier,
+        )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PasswordEntryDetailContent(
+internal fun PasswordEntryDetailContent(
     entry: PasswordEntry,
-    onCopy: (label: String, text: String) -> Unit,
+    onCopy: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val scroll = rememberScrollState()
-    var zoomFile by remember { mutableStateOf<File?>(null) }
-
+    var zoomFile by remember(entry.id) { mutableStateOf<File?>(null) }
+    val attachmentPaths =
+        remember(entry.attachmentsJson, entry.imagePath) { entry.allAttachmentPaths() }
     Column(
-        modifier =
-            modifier
-                .verticalScroll(scroll)
-                .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+        modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(top = 12.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        TitleAvatarSection(
-            title = entry.title,
-            avatarImagePath = entry.avatarImagePath,
-            onEditAvatarClick = {},
-            showEditBadge = false,
-        )
-        Text(
-            text = entry.title,
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SelectionContainer {
-            Text(
-                text = entry.description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        if (!entry.detailedDescription.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.field_detailed_description),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            SelectionContainer {
-                Text(
-                    text = entry.detailedDescription,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        // The identity stays compact so credentials remain visible above the fold.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            PasswordListRowAvatar(entry.title, entry.avatarImagePath, Modifier.size(64.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(entry.title, style = MaterialTheme.typography.headlineSmall)
+                if (entry.description.isNotBlank())
+                    SelectionContainer {
+                        Text(
+                            entry.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider()
-
-        DetailCopyableSection(
-            label = stringResource(R.string.field_account_name),
-            value = entry.accountName,
-            onCopy = onCopy,
-        )
-        DetailCopyableSection(
-            label = stringResource(R.string.field_username),
-            value = entry.username,
-            onCopy = onCopy,
-        )
-        DetailCopyableSection(
-            label = stringResource(R.string.field_password),
-            value = entry.password,
-            onCopy = onCopy,
-            isPasswordField = true,
-        )
-        DetailCopyableSection(
-            label = stringResource(R.string.field_url),
-            value = entry.url,
-            onCopy = onCopy,
-        )
-        DetailTagsSection(tagsRaw = entry.tags, onCopy = onCopy)
-
-        val attachmentPaths = entry.allAttachmentPaths().filter { File(it).exists() }
-        if (attachmentPaths.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.detail_attachment_title),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            attachmentPaths.forEach { path ->
-                val file = File(path)
-                Spacer(modifier = Modifier.height(8.dp))
-                AsyncImage(
-                    model = file,
-                    contentDescription = stringResource(R.string.add_image_preview_desc),
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth().height(200.dp).clickable { zoomFile = file },
-                )
+        if (entry.password.isNotBlank())
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DetailSectionLabel(stringResource(R.string.field_password))
+                Card(
+                    shape = RoundedCornerShape(22.dp),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor =
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        ),
+                ) {
+                    CredentialRow(
+                        stringResource(R.string.field_password),
+                        entry.password,
+                        Icons.Outlined.Key,
+                        onCopy,
+                        isPassword = true,
+                    )
+                }
             }
-        }
-
-        zoomFile?.let { file ->
-            ImageAttachmentZoomDialog(imageFile = file, onDismiss = { zoomFile = null })
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text =
+        val fields =
+            listOf(
+                    Triple(
+                        R.string.field_account_name,
+                        entry.accountName,
+                        Icons.Outlined.AlternateEmail,
+                    ),
+                    Triple(R.string.field_username, entry.username, Icons.Outlined.PersonOutline),
+                    Triple(R.string.field_url, entry.url, Icons.Outlined.Language),
+                )
+                .filter { it.second.isNotBlank() }
+        if (fields.isNotEmpty())
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DetailSectionLabel(stringResource(R.string.detail_account_section))
+                Card(
+                    shape = RoundedCornerShape(22.dp),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                ) {
+                    fields.forEachIndexed { index, (label, value, icon) ->
+                        if (index > 0)
+                            HorizontalDivider(
+                                Modifier.padding(start = 60.dp, end = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                            )
+                        CredentialRow(stringResource(label), value, icon, onCopy)
+                    }
+                }
+            }
+        if (!entry.detailedDescription.isNullOrBlank())
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DetailSectionLabel(stringResource(R.string.field_detailed_description))
+                Card(
+                    shape = RoundedCornerShape(22.dp),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            entry.detailedDescription,
+                            Modifier.padding(18.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        val tags =
+            remember(entry.tags) {
+                entry.tags.split(',', '，').map(String::trim).filter(String::isNotEmpty)
+            }
+        if (tags.isNotEmpty())
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val tagsLabel = stringResource(R.string.dialog_tags_label)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DetailSectionLabel(tagsLabel)
+                    TextButton(onClick = { onCopy(tagsLabel, entry.tags.trim()) }) {
+                        Text(stringResource(R.string.action_copy))
+                    }
+                }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    tags.forEach { tag ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                        ) {
+                            Text(
+                                tag,
+                                Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
+        if (attachmentPaths.isNotEmpty())
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DetailSectionLabel(
+                        stringResource(R.string.detail_attachment_count, attachmentPaths.size)
+                    )
+                    Text(
+                        stringResource(R.string.detail_tap_image_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    itemsIndexed(attachmentPaths, key = { index, path -> "$index:$path" }) {
+                        index,
+                        path ->
+                        val file = remember(path) { File(path) }
+                        Column(
+                            Modifier.width(144.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            ) {
+                                AsyncImage(
+                                    file,
+                                    contentDescription =
+                                        stringResource(R.string.detail_image_number, index + 1),
+                                    contentScale = ContentScale.Crop,
+                                    modifier =
+                                        Modifier.size(144.dp, 176.dp).clickable { zoomFile = file },
+                                )
+                            }
+                            Text(
+                                stringResource(R.string.detail_image_number, index + 1),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+            Icon(
+                Icons.Outlined.Schedule,
+                contentDescription = null,
+                Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
                 stringResource(
                     R.string.detail_last_updated_line,
                     DateTimeFormatters.formatDateTime(entry.updatedAt),
                     RelativeTimeFormatter.formatPast(context, entry.updatedAt),
                 ),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
+    zoomFile?.let { ImageAttachmentZoomDialog(it, onDismiss = { zoomFile = null }) }
 }
 
 @Composable
-private fun DetailCopyableSection(
+private fun DetailSectionLabel(label: String) {
+    Text(
+        label,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun CredentialRow(
     label: String,
     value: String,
-    onCopy: (label: String, text: String) -> Unit,
-    isPasswordField: Boolean = false,
+    icon: ImageVector,
+    onCopy: (String, String) -> Unit,
+    isPassword: Boolean = false,
 ) {
-    if (value.isBlank()) return
-
-    var passwordVisible by remember { mutableStateOf(false) }
-    val displayText =
-        if (isPasswordField && !passwordVisible) {
-            "\u2022".repeat(value.length)
-        } else {
-            value
-        }
-
-    Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // \u5de6\u4fa7\uff1a\u6807\u7b7e
+    var visible by remember(value) { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
-                text = label,
+                label,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.widthIn(max = 80.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            // \u4e2d\u95f4\uff1a\u503c
+            val text = if (isPassword && !visible) "•••• •••• ••••" else value
             Text(
-                text = displayText,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
+                text,
+                style = MaterialTheme.typography.bodyLarge,
+                fontFamily = if (isPassword) FontFamily.Monospace else null,
             )
-            // \u53f3\u4fa7\uff1a\u64cd\u4f5c\u6309\u94ae
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isPasswordField) {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            imageVector =
-                                if (passwordVisible) {
-                                    Icons.Filled.VisibilityOff
-                                } else {
-                                    Icons.Filled.Visibility
-                                },
-                            contentDescription =
-                                stringResource(
-                                    if (passwordVisible) {
-                                        R.string.detail_hide_password_desc
-                                    } else {
-                                        R.string.detail_show_password_desc
-                                    }
-                                ),
-                        )
-                    }
+        }
+        Row {
+            if (isPassword)
+                IconButton(onClick = { visible = !visible }) {
+                    Icon(
+                        if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription =
+                            stringResource(
+                                if (visible) R.string.detail_hide_password_desc
+                                else R.string.detail_show_password_desc
+                            ),
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
-                TextButton(onClick = { onCopy(label, value) }) {
-                    Text(stringResource(R.string.action_copy))
-                }
+            IconButton(onClick = { onCopy(label, value) }) {
+                Icon(
+                    Icons.Outlined.ContentCopy,
+                    contentDescription = stringResource(R.string.detail_copy_field, label),
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
 }
 
-private fun parseTagList(tagsRaw: String): List<String> =
-    tagsRaw.split(',', '，').map { it.trim() }.filter { it.isNotEmpty() }
-
-@OptIn(ExperimentalLayoutApi::class)
+@Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
-private fun DetailTagsSection(tagsRaw: String, onCopy: (label: String, text: String) -> Unit) {
-    if (tagsRaw.isBlank()) return
+private fun DetailDesignPreview() {
+    MyPasswordsTheme(dynamicColor = false) {
+        PasswordEntryDetailContent(
+            PasswordEntry(
+                id = 1,
+                title = "示例服务",
+                accountName = "hello@example.com",
+                username = "demo_user",
+                password = "Example-Only-123",
+                url = "https://example.com/account",
+                description = "个人账号 · 日常使用",
+                detailedDescription = "这是用于预览的示例条目。",
+                tags = "个人,常用",
+                imagePath = null,
+            ),
+            { _, _ -> },
+        )
+    }
+}
 
-    val tags = parseTagList(tagsRaw)
-    if (tags.isEmpty()) return
-
-    val tagsLabel = stringResource(R.string.dialog_tags_label)
-
-    Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = tagsLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    tags.forEach { tag ->
-                        AssistChip(onClick = {}, label = { Text(tag) }, enabled = false)
-                    }
-                }
-            }
-            TextButton(onClick = { onCopy(tagsLabel, tagsRaw.trim()) }) {
-                Text(stringResource(R.string.action_copy))
-            }
-        }
+@Preview(showBackground = true, widthDp = 393, heightDp = 852, fontScale = 1.3f)
+@Composable
+private fun DetailLargeTextPreview() {
+    MyPasswordsTheme(darkTheme = true, dynamicColor = false) {
+        PasswordEntryDetailContent(
+            PasswordEntry(
+                id = 1,
+                title = "Example service",
+                accountName = "long.account.name@example.com",
+                username = "example_user",
+                password = "Example-Only-123",
+                url = "https://example.com/very/long/account/address",
+                description = "Personal account",
+                detailedDescription = null,
+                tags = "Personal,Daily",
+                imagePath = null,
+            ),
+            { _, _ -> },
+        )
     }
 }

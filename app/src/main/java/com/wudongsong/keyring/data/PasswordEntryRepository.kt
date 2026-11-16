@@ -35,6 +35,8 @@ class PasswordEntryRepository(
         }
     }
 
+    fun observeEntry(id: Long): Flow<PasswordEntry?> = dao.observeById(id)
+
     suspend fun getEntry(id: Long): PasswordEntry? = dao.getById(id)
 
     suspend fun importBackup(entries: List<PasswordEntry>, policy: ImportPolicy): ImportPlan =

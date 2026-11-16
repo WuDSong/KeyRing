@@ -331,4 +331,43 @@ class SecurityMigrationTest {
         prefs.removeTrustedDevice("remote-id")
         assertTrue(prefs.getTrustedDevices().isEmpty())
     }
+
+    @Test
+    fun legacyBiometricVerificationCreatesPersistentBindingAndRejectsChangedPassword() =
+        runBlocking {
+            val context = isolatedContext()
+            val store = PasswordStore(context)
+            store.setPassword("original master").getOrThrow()
+            val proof =
+                com.wudongsong.keyring.security.BiometricCredential(
+                    "original master",
+                    "authenticated-cipher-a",
+                )
+            assertTrue(store.verifyBiometricCredential(proof))
+            val restarted = PasswordStore(context)
+            assertTrue(restarted.verifyBiometricCredential(proof))
+            restarted.changePassword("original master", "new master password").getOrThrow()
+            assertFalse(restarted.verifyBiometricCredential(proof))
+        }
+
+    @Test
+    fun enrollmentBindingCannotAttachToAChangedMasterPassword() = runBlocking {
+        val context = isolatedContext()
+        val store = PasswordStore(context)
+        store.setPassword("original master").getOrThrow()
+        val record = store.verifyForBiometricEnrollment("original master")!!
+        assertTrue(store.bindBiometricCredential("cipher-a", record))
+        assertTrue(
+            store.verifyBiometricCredential(
+                com.wudongsong.keyring.security.BiometricCredential("original master", "cipher-a")
+            )
+        )
+        store.changePassword("original master", "new master password").getOrThrow()
+        assertFalse(store.bindBiometricCredential("cipher-a", record))
+        assertFalse(
+            store.verifyBiometricCredential(
+                com.wudongsong.keyring.security.BiometricCredential("original master", "cipher-a")
+            )
+        )
+    }
 }
