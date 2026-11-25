@@ -164,14 +164,24 @@
 
 ---
 
+## KeyRing 1.3.0（2026-11-25）
+
+- **条目与图标**：为新增和编辑条目加入全屏圆形裁剪，支持拖动、双指缩放，停止操作 3 秒后显示成品预览。Android 10 选图可走系统文件选择器；保存遇到必填项或密码确认错误时，会定位到对应字段。
+- **界面**：重整设置、条目详情与局域网同步页。固定浅色与深色配色，状态栏图标跟随应用主题；浅色设置页使用纯白卡片。
+- **解锁**：首次设置主密码前检查加密存储，防止覆盖已有主密码。优化主密码校验和生物识别流程，熄屏时结束未完成的生物识别请求，密码解锁入口可独立使用。
+- **存储与备份**：使用 SQLCipher 加密本地数据库，升级时迁移已有数据。新增密码保护的 `.krbackup` 导出，仍支持导入旧版 ZIP 和 JSON；导入前可预览并选择重复条目的处理方式。
+- **隐私与可靠性**：新增屏幕内容保护与复制内容自动清理设置。修复导入、同步、附件处理中的数据一致性问题，补充对应回归测试。
+
+---
+
 ## 技术栈摘要
 
 | 类别 | 选型 |
 |------|------|
 | UI | Jetpack Compose, Material 3 |
 | 导航 | Navigation Compose |
-| 本地库 | Room + KSP |
-| 安全 | EncryptedSharedPreferences，密码哈希 SHA-256 |
+| 本地库 | Room + KSP + SQLCipher |
+| 安全 | Android Keystore、EncryptedSharedPreferences、PBKDF2-HMAC-SHA256 |
 | 图片 | Coil，系统 Photo Picker |
 | 语言 | Kotlin |
 | 局域网同步 | Ktor Server/Client CIO，Kotlinx Serialization，AES-GCM，NSD |
