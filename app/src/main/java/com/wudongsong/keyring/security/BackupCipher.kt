@@ -16,6 +16,17 @@ object BackupCipher {
         get() = "KRBACK01".toByteArray(Charsets.US_ASCII)
 
     const val MIN_PASSWORD_LENGTH = 8
+
+    /**
+     * Backup archives leave the device and can be attacked offline, so their KDF stays at the
+     * stronger setting even though the app-unlock verifier uses a lower one. The header records
+     * the count, so files written with any count within [MIN_ITERATIONS]..[MAX_ITERATIONS] still
+     * open.
+     */
+    private const val ITERATIONS = 600_000
+    private const val MIN_ITERATIONS = 100_000
+    private const val MAX_ITERATIONS = 2_000_000
+
     private const val CHUNK = 64 * 1024
     private const val HEADER_SIZE = 8 + 4 + 16 + 8
 
@@ -29,11 +40,11 @@ object BackupCipher {
         val header =
             ByteBuffer.allocate(HEADER_SIZE)
                 .put(MAGIC)
-                .putInt(PasswordHash.ITERATIONS)
+                .putInt(ITERATIONS)
                 .put(salt)
                 .put(prefix)
                 .array()
-        val key = PasswordHash.derive(password, salt, PasswordHash.ITERATIONS)
+        val key = PasswordHash.derive(password, salt, ITERATIONS)
         val target = DataOutputStream(output)
         target.write(header)
         var index = 0
@@ -101,7 +112,7 @@ object BackupCipher {
         val magic = ByteArray(8).also(fields::get)
         require(magic.contentEquals(MAGIC)) { "Unsupported encrypted backup format" }
         val iterations = fields.int
-        require(iterations in PasswordHash.ITERATIONS..2_000_000) {
+        require(iterations in MIN_ITERATIONS..MAX_ITERATIONS) {
             "Invalid backup KDF parameters"
         }
         val salt = ByteArray(16).also(fields::get)

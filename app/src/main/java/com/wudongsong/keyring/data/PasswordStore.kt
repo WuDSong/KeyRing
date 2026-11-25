@@ -28,14 +28,47 @@ class PasswordStore(context: Context) {
         )
     }
 
+    // Only a positive hint may skip the startup read. A stale negative hint never authorizes setup.
+    private val hintPrefs by lazy {
+        appContext.getSharedPreferences(HINT_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    fun hasPasswordSetHint(): Boolean = hintPrefs.getBoolean(KEY_PASSWORD_SET_HINT, false)
+
+    private fun rememberPasswordExists() {
+        if (!hasPasswordSetHint()) hintPrefs.edit().putBoolean(KEY_PASSWORD_SET_HINT, true).apply()
+    }
+
     suspend fun isPasswordSet(): Boolean =
-        withContext(Dispatchers.IO) { prefs.getString(KEY_PASSWORD_HASH, null) != null }
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                val exists = prefs.contains(KEY_PASSWORD_HASH)
+                if (exists) rememberPasswordExists()
+                exists
+            }
+        }
 
     suspend fun setPassword(plainPassword: String): Result<Unit> =
-        withContext(Dispatchers.IO) { mutex.withLock { savePassword(plainPassword) } }
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                runCatching {
+                    if (prefs.contains(KEY_PASSWORD_HASH)) {
+                        rememberPasswordExists()
+                        throw PasswordAlreadySetException()
+                    }
+                    savePassword(plainPassword)
+                }
+            }
+        }
 
     suspend fun verifyPassword(plainPassword: String): Boolean =
-        withContext(Dispatchers.IO) { mutex.withLock { verifyAndUpgrade(plainPassword) } }
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                UnlockTimings.measure(appContext, "password verify") {
+                    verifyAndUpgrade(plainPassword)
+                }
+            }
+        }
 
     suspend fun verifyForBiometricEnrollment(password: String): String? =
         withContext(Dispatchers.IO) {
@@ -96,7 +129,10 @@ class PasswordStore(context: Context) {
     private fun verifyAndUpgrade(password: String): Boolean {
         val stored = prefs.getString(KEY_PASSWORD_HASH, null) ?: return false
         if (!PasswordHash.verify(password, stored)) return false
-        if (PasswordHash.isLegacy(stored)) {
+        // Rewrite once per cost-policy change: legacy SHA-256 records and records derived with a
+        // different PBKDF2 count are both re-derived with the current parameters. The biometric
+        // binding is keyed on the verifier text, so it is dropped and rebuilt on next use.
+        if (PasswordHash.needsUpgrade(stored)) {
             check(
                 prefs
                     .edit()
@@ -116,12 +152,12 @@ class PasswordStore(context: Context) {
             mutex.withLock {
                 runCatching {
                     require(verifyAndUpgrade(oldPassword)) { "wrong_old" }
-                    savePassword(newPassword).getOrThrow()
+                    savePassword(newPassword)
                 }
             }
         }
 
-    private fun savePassword(password: String): Result<Unit> = runCatching {
+    private fun savePassword(password: String) {
         require(password.length >= MIN_PASSWORD_LENGTH) { "too_short" }
         check(
             prefs
@@ -133,11 +169,16 @@ class PasswordStore(context: Context) {
         ) {
             "Cannot save password verifier"
         }
+        rememberPasswordExists()
     }
+
+    class PasswordAlreadySetException : IllegalStateException("A master password is already set")
 
     companion object {
         const val MIN_PASSWORD_LENGTH = 4
         private const val PREFS_NAME = "auth_secure_prefs"
+        private const val HINT_PREFS_NAME = "auth_state_prefs"
+        private const val KEY_PASSWORD_SET_HINT = "password_set"
         private const val KEY_BIOMETRIC_ID = "biometric_ciphertext_id"
         private const val KEY_BIOMETRIC_VERIFIER = "biometric_verified_record"
         private const val KEY_PASSWORD_HASH = "password_hash"

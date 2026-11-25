@@ -40,9 +40,9 @@
   - 新增/编辑页可一键生成并填充
 - **网站图标（Favicon）**
   - 在新增/编辑页可从网站获取图标作为条目头像
-  - 设置中有“允许使用网络”开关（默认关闭）
+  - 设置中的「下载网站图标」开关默认关闭
 - **图片与头像**
-  - 支持相册选图作为头像
+  - 支持相册或文件管理器选图，并在全屏裁剪后设为头像
   - 支持添加多张附件图片
 - **搜索与排序**
   - 支持关键字搜索
@@ -63,9 +63,9 @@
 ### 安全与隐私说明
 
 - 数据默认存储在本机（本地优先）
-- 应用主密码使用随机 16 字节盐和 PBKDF2-HMAC-SHA256（600,000 轮）校验，不存明文；旧 SHA-256 校验记录在正确解锁后自动升级
+- 应用主密码使用随机 16 字节盐和 PBKDF2-HMAC-SHA256（120,000 轮）校验，不存明文；旧 SHA-256 校验记录、以及按旧轮数生成的校验记录，都会在正确解锁后自动按当前参数重写
 - 整个 Room 数据库使用 SQLCipher 加密，随机数据库密钥由 Android Keystore 保护；首次升级会迁移原有明文库，迁移失败不会主动清空原库
-- 新备份为 `.krbackup` 加密归档（PBKDF2 + 分块 AES-256-GCM），包含条目与图片；备份密码独立于应用主密码，至少 8 位。恢复备份必须提供导出时的密码
+- 新备份为 `.krbackup` 加密归档（PBKDF2-HMAC-SHA256 600,000 轮 + 分块 AES-256-GCM），包含条目与图片；备份密码独立于应用主密码，至少 8 位。恢复备份必须提供导出时的密码。备份文件会离开设备、可被离线爆破，因此它的 KDF 强度独立于解锁校验，保持 600,000 轮
 - 旧版 ZIP / JSON 备份仍支持导入；旧备份文件不会自动变成密文。新备份无法由旧版应用或普通 ZIP 工具打开
 - 直接复制数据库到其他设备无法恢复设备绑定的密钥，请使用应用的加密导出/导入迁移数据
 - 生物识别能力基于系统安全组件（Keystore + Biometric）
@@ -107,7 +107,7 @@
 
 - 已启用 `release` 的 R8 代码压缩与资源裁剪
 - 已限制打包语言资源为中英两套
-- Release 包体积已从约 49.6MB 优化到约 6.2MB（随版本略有波动）
+- KeyRing 1.3.0 的通用 Release APK 约 26.4 MB，包含 SQLCipher 原生库
 
 ### 路线图（建议）
 
@@ -143,16 +143,16 @@ The project focuses on **offline usability, privacy, and clean user experience**
   - One-tap generation in add/edit screens
 - **Website favicon support**
   - Fetch website icon as entry avatar
-  - Controlled by a dedicated network toggle (off by default)
+  - Controlled by the “Download website icons” setting (off by default)
 - **Images and avatars**
-  - Custom avatar from gallery
+  - Choose an avatar from the gallery or file picker and crop it full screen
   - Multiple attachment images
 - **Search and sort**
   - Keyword search
   - Sort by name/time in ascending/descending order
 - **Backup**
-  - Export data
-  - Import data
+  - Export password-protected `.krbackup` files
+  - Preview and import encrypted backups or older ZIP and JSON files
 - **LAN sync**
   - Peer-to-peer encrypted sync between devices on the same Wi-Fi
   - Bidirectional data merging (pull then push)
@@ -166,9 +166,9 @@ The project focuses on **offline usability, privacy, and clean user experience**
 ### Privacy & Security
 
 - Local-first data storage
-- Master password verified with PBKDF2-HMAC-SHA256 (600,000 iterations, random 16-byte salt); successful legacy SHA-256 unlocks upgrade the verifier
+- Master password verified with PBKDF2-HMAC-SHA256 (120,000 iterations, random 16-byte salt); successful legacy SHA-256 unlocks, and records derived with an older iteration count, are rewritten with the current parameters
 - Full Room database encryption with SQLCipher; a random database key is protected by Android Keystore. Existing plaintext databases are migrated with a recoverable staged replacement
-- New `.krbackup` exports encrypt all entries and images with PBKDF2 and chunked AES-256-GCM. A separate backup password of at least 8 characters is required; changing the app password does not change older backups
+- New `.krbackup` exports encrypt all entries and images with PBKDF2-HMAC-SHA256 (600,000 iterations) and chunked AES-256-GCM. A separate backup password of at least 8 characters is required; changing the app password does not change older backups. Backup files leave the device and can be attacked offline, so their KDF strength is independent of the unlock verifier and stays at 600,000
 - Legacy ZIP / JSON imports remain supported; existing backup files remain unchanged. New backups require this app version and cannot be opened by ordinary ZIP tools
 - Use encrypted exports to move data between devices; copying a database does not transfer its device-bound key
 - Biometric flow protected with Android platform security components
@@ -200,7 +200,7 @@ Use `gradlew.bat` on Windows.
 
 - Release minification and resource shrinking are enabled
 - Packaged locales are restricted to Chinese and English
-- Release APK size has been reduced significantly (roughly from ~49.6MB to ~6.2MB)
+- The universal KeyRing 1.3.0 Release APK is about 26.4 MB and includes the SQLCipher native libraries
 
 ---
 

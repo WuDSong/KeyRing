@@ -62,6 +62,22 @@ class SecurityCryptoTest {
     }
 
     @Test
+    fun masterVerifiersMatchTheOriginalPbkdf2Provider() {
+        val password = "主密码🔑-" + "x".repeat(64)
+        val record = PasswordHash.create(password).split('$')
+        val encoder = Base64.getEncoder()
+        val decoder = Base64.getDecoder()
+        val salt = decoder.decode(record[2])
+        val expected = PasswordHash.derive(password.toCharArray(), salt, PasswordHash.ITERATIONS)
+        assertArrayEquals(expected, decoder.decode(record[3]))
+
+        val oldHash = PasswordHash.derive(password.toCharArray(), salt, 600_000)
+        val oldRecord = listOf(record[0], "600000", record[2], encoder.encodeToString(oldHash))
+            .joinToString("$")
+        assertTrue(PasswordHash.verify(password, oldRecord))
+    }
+
+    @Test
     fun acceptsLegacyVerifierButRejectsMalformedAndExpensiveRecords() {
         val legacy =
             Base64.getEncoder()

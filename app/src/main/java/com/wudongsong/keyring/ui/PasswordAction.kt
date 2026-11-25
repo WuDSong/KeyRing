@@ -11,7 +11,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-class PasswordAction(private val scope: CoroutineScope, private val onError: () -> Unit) {
+class PasswordAction(
+    private val scope: CoroutineScope,
+    private val onError: (Throwable) -> Unit,
+) {
     var busy by mutableStateOf(false)
         private set
 
@@ -23,8 +26,8 @@ class PasswordAction(private val scope: CoroutineScope, private val onError: () 
                 block()
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
-                onError()
+            } catch (e: Exception) {
+                onError(e)
             } finally {
                 busy = false
             }
@@ -33,8 +36,8 @@ class PasswordAction(private val scope: CoroutineScope, private val onError: () 
 }
 
 @Composable
-fun rememberPasswordAction(onError: () -> Unit): PasswordAction {
+fun rememberPasswordAction(onError: (Throwable) -> Unit): PasswordAction {
     val scope = rememberCoroutineScope()
     val currentError by rememberUpdatedState(onError)
-    return remember(scope) { PasswordAction(scope) { currentError() } }
+    return remember(scope) { PasswordAction(scope) { currentError(it) } }
 }

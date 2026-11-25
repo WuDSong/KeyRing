@@ -13,6 +13,13 @@ internal object UnlockTimings {
         }
     }
 
+    /** Records the exception type and stack; never logs passwords or ciphertext. */
+    fun failure(context: Context, stage: String, error: Throwable) {
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            Log.d("KeyRingPerf", "$stage: ${error.javaClass.simpleName}: ${error.message}", error)
+        }
+    }
+
     suspend fun <T> measure(context: Context, stage: String, block: suspend () -> T): T {
         if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return block()
         val start = SystemClock.elapsedRealtimeNanos()

@@ -1,4 +1,4 @@
-package com.wudongsong.keyring.ui.auth
+﻿package com.wudongsong.keyring.ui.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.wudongsong.keyring.R
 import com.wudongsong.keyring.data.PasswordStore
 import com.wudongsong.keyring.ui.rememberPasswordAction
+import com.wudongsong.keyring.util.UnlockTimings
 
 @Composable
 fun ChangePasswordScreen(
@@ -48,7 +49,8 @@ fun ChangePasswordScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
-    val authAction = rememberPasswordAction {
+    val authAction = rememberPasswordAction { error ->
+        UnlockTimings.failure(context, "change password failed", error)
         errorMessage = context.getString(R.string.auth_error_generic)
     }
     val scroll = rememberScrollState()

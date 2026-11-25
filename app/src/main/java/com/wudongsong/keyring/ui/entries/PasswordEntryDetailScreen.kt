@@ -359,7 +359,7 @@ private fun CredentialRow(
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
 private fun DetailDesignPreview() {
-    MyPasswordsTheme(dynamicColor = false) {
+    MyPasswordsTheme {
         PasswordEntryDetailContent(
             PasswordEntry(
                 id = 1,
@@ -381,7 +381,7 @@ private fun DetailDesignPreview() {
 @Preview(showBackground = true, widthDp = 393, heightDp = 852, fontScale = 1.3f)
 @Composable
 private fun DetailLargeTextPreview() {
-    MyPasswordsTheme(darkTheme = true, dynamicColor = false) {
+    MyPasswordsTheme(darkTheme = true) {
         PasswordEntryDetailContent(
             PasswordEntry(
                 id = 1,

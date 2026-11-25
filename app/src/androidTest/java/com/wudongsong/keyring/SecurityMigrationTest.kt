@@ -170,6 +170,23 @@ class SecurityMigrationTest {
     }
 
     @Test
+    fun staleUnsetHintCannotOverwriteAnExistingMasterPassword() = runBlocking {
+        val context = isolatedContext()
+        val store = PasswordStore(context)
+        assertTrue(store.setPassword("original master").isSuccess)
+        val hint = context.getSharedPreferences("auth_state_prefs", Context.MODE_PRIVATE)
+        check(hint.edit().putBoolean("password_set", false).commit())
+
+        assertFalse(store.hasPasswordSetHint())
+        val result = store.setPassword("replacement")
+        assertTrue(result.exceptionOrNull() is PasswordStore.PasswordAlreadySetException)
+        assertTrue(store.isPasswordSet())
+        assertTrue(store.hasPasswordSetHint())
+        assertTrue(store.verifyPassword("original master"))
+        assertFalse(store.verifyPassword("replacement"))
+    }
+
+    @Test
     fun upgradesLegacyVerifierAndChangingPasswordRemainsCompatible() = runBlocking {
         val context = isolatedContext()
         val prefs =

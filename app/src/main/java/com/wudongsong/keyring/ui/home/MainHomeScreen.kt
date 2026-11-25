@@ -2,6 +2,7 @@ package com.wudongsong.keyring.ui.home
 
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DrawerDefaults
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,22 +58,29 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -98,6 +107,7 @@ import com.wudongsong.keyring.data.ImportPolicy
 import com.wudongsong.keyring.data.PasswordEntryRepository
 import com.wudongsong.keyring.data.PasswordStore
 import com.wudongsong.keyring.data.ThemeMode
+import com.wudongsong.keyring.data.isDark
 import com.wudongsong.keyring.data.local.PasswordEntry
 import com.wudongsong.keyring.data.planImport
 import com.wudongsong.keyring.ui.auth.ChangePasswordScreen
@@ -108,6 +118,7 @@ import com.wudongsong.keyring.ui.entries.PasswordSearchScreen
 import com.wudongsong.keyring.ui.navigation.HomeRoutes
 import com.wudongsong.keyring.ui.rememberExternalActivityLauncher
 import com.wudongsong.keyring.ui.rememberPasswordAction
+import com.wudongsong.keyring.util.UnlockTimings
 import com.wudongsong.keyring.util.PasswordBackup
 import java.time.Instant
 import java.time.ZoneId
@@ -140,14 +151,21 @@ fun MainHomeScreen(
     val context = LocalContext.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val drawerWidth = minOf(screenWidth * 0.86f, 360.dp)
-    val entryCount by
-        entryRepository.observeEntryCount().collectAsStateWithLifecycle(initialValue = 0)
-    val lastUnlockAtMillis by
-        appPreferences
-            .observeLastSuccessfulUnlockTimestamp()
-            .collectAsStateWithLifecycle(
-                initialValue = appPreferences.getLastSuccessfulUnlockTimestamp()
-            )
+    // Material3 lays the drawer sheet out at x = 0 on the first pass, before the closed anchor is
+    // known, so the panel and its scrim flashed on every entry to this screen. Both stay
+    // invisible until the sheet has actually been placed off-screen (or the drawer is opened).
+    var drawerSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(drawerState) {
+        snapshotFlow { drawerState.targetValue }
+            .collect { target -> if (target == DrawerValue.Open) drawerSettled = true }
+    }
+    var drawerContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // Give the newly unlocked list its first frame before composing the offscreen menu.
+        withFrameNanos { }
+        withFrameNanos { UnlockTimings.event(context, "home first frame") }
+        drawerContentReady = true
+    }
 
     var backupUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var backupExport by remember { mutableStateOf(false) }
@@ -328,8 +346,30 @@ fun MainHomeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        scrimColor = if (drawerSettled) DrawerDefaults.scrimColor else Color.Transparent,
         drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.width(drawerWidth).fillMaxHeight()) {
+            ModalDrawerSheet(
+                modifier =
+                    Modifier.width(drawerWidth)
+                        .fillMaxHeight()
+                        .graphicsLayer { alpha = if (drawerSettled) 1f else 0f }
+                        .onGloballyPositioned { coords ->
+                            if (!drawerSettled &&
+                                coords.positionInRoot().x <= -coords.size.width / 2f
+                            ) {
+                                drawerSettled = true
+                            }
+                        }
+            ) {
+                if (!drawerContentReady && drawerState.targetValue != DrawerValue.Open) {
+                    return@ModalDrawerSheet
+                }
+                val entryCount by
+                    entryRepository.observeEntryCount().collectAsStateWithLifecycle(initialValue = 0)
+                val lastUnlockAtMillis by
+                    appPreferences.observeLastSuccessfulUnlockTimestamp().collectAsStateWithLifecycle(
+                        initialValue = appPreferences.getLastSuccessfulUnlockTimestamp()
+                    )
                 Column(
                     modifier =
                         Modifier.fillMaxHeight()
@@ -513,6 +553,9 @@ private fun MainScaffoldContent(
     val isList = route == HomeRoutes.LIST
     val isSearch = route == HomeRoutes.SEARCH
     val isSettings = route == HomeRoutes.SETTINGS
+    val darkTheme = themeMode.isDark(isSystemInDarkTheme())
+    val lightSettingsBackground = isSettings && !darkTheme
+    val settingsBackground = MaterialTheme.colorScheme.surfaceContainer
     val isLanSync = route == HomeRoutes.LAN_SYNC
     val isLanguage = route == HomeRoutes.LANGUAGE
     val isAbout = route == HomeRoutes.ABOUT
@@ -544,6 +587,8 @@ private fun MainScaffoldContent(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            containerColor =
+                if (lightSettingsBackground) settingsBackground else MaterialTheme.colorScheme.background,
             topBar = {
                 when {
                     showChangePassword -> {
@@ -597,6 +642,11 @@ private fun MainScaffoldContent(
                     }
                     else -> {
                         TopAppBar(
+                            colors = if (lightSettingsBackground) {
+                                TopAppBarDefaults.topAppBarColors(containerColor = settingsBackground)
+                            } else {
+                                TopAppBarDefaults.topAppBarColors()
+                            },
                             title = {
                                 when {
                                     isAdd -> Text(stringResource(R.string.add_entry_title))
@@ -826,6 +876,7 @@ private fun MainScaffoldContent(
                         composable(HomeRoutes.SETTINGS) {
                             SettingsScreen(
                                 themeMode = themeMode,
+                                darkTheme = darkTheme,
                                 onThemeModeChange = onThemeModeChange,
                                 appPreferences = appPreferences,
                                 passwordStore = passwordStore,
@@ -890,7 +941,8 @@ private fun DeleteEntryConfirmSheet(
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val authAction = rememberPasswordAction {
+    val authAction = rememberPasswordAction { error ->
+        UnlockTimings.failure(context, "delete entry failed", error)
         errorMessage = context.getString(R.string.auth_error_generic)
     }
     val focusRequester = remember { FocusRequester() }

@@ -1,5 +1,7 @@
 package com.wudongsong.keyring.ui.entries
 
+import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.PickVisualMediaRequest
@@ -19,6 +21,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -73,6 +78,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AddPasswordScreen(
     repository: PasswordEntryRepository,
@@ -119,7 +125,14 @@ fun AddPasswordScreen(
     var tags by draft.tags
     var attachmentPaths by draft.attachmentPaths
     var avatarImagePath by draft.avatarImagePath
+    var avatarCropUri by remember { mutableStateOf<Uri?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var titleMissing by remember { mutableStateOf(false) }
+    var confirmMismatch by remember { mutableStateOf(false) }
+    // Validation errors used to be printed at the very bottom of a long form, where the user never
+    // looked after tapping save in the top bar. Each rejected field is now flagged and scrolled to.
+    val titleBringIntoView = remember { BringIntoViewRequester() }
+    val confirmBringIntoView = remember { BringIntoViewRequester() }
     var faviconLoading by remember { mutableStateOf(false) }
     var showNetworkFaviconDialog by remember { mutableStateOf(false) }
 
@@ -138,9 +151,13 @@ fun AddPasswordScreen(
     SideEffect {
         onRegisterBackAction(requestBack)
         onRegisterTopBarSave {
-            if (saving || !loaded || faviconLoading) return@onRegisterTopBarSave
+            if (saving || !loaded || faviconLoading || avatarCropUri != null) return@onRegisterTopBarSave
+            titleMissing = false
+            confirmMismatch = false
             if (title.isBlank()) {
-                errorMessage = context.getString(R.string.error_title_required)
+                titleMissing = true
+                errorMessage = null
+                scope.launch { titleBringIntoView.bringIntoView() }
                 return@onRegisterTopBarSave
             }
             if (!UrlValidation.isAcceptableUrlOrEmpty(url)) {
@@ -148,7 +165,9 @@ fun AddPasswordScreen(
                 return@onRegisterTopBarSave
             }
             if (password != confirmPassword) {
-                errorMessage = context.getString(R.string.error_password_confirm_mismatch)
+                confirmMismatch = true
+                errorMessage = null
+                scope.launch { confirmBringIntoView.bringIntoView() }
                 return@onRegisterTopBarSave
             }
             val existing = draft.original
@@ -215,22 +234,24 @@ fun AddPasswordScreen(
 
     val avatarPicker =
         rememberExternalActivityLauncher(contract = PickVisualMedia()) { uri ->
-            uri ?: return@rememberExternalActivityLauncher
-            val path = ImageStorage.copyFromUri(context, uri)?.let(draft::register)
-            if (path != null) {
-                avatarImagePath = draft.register(path)
-            }
+            if (uri != null) avatarCropUri = uri
         }
 
     val filePicker =
-        rememberExternalActivityLauncher(contract = ActivityResultContracts.GetContent()) {
-            uri: android.net.Uri? ->
-            uri ?: return@rememberExternalActivityLauncher
-            val path = ImageStorage.copyFromUri(context, uri)?.let(draft::register)
-            if (path != null) {
-                avatarImagePath = draft.register(path)
-            }
+        rememberExternalActivityLauncher(contract = ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) avatarCropUri = uri
         }
+
+    avatarCropUri?.let { uri ->
+        AvatarCropDialog(
+            uri = uri,
+            onDismiss = { avatarCropUri = null },
+            onCropped = { path ->
+                avatarImagePath = draft.register(path)
+                avatarCropUri = null
+            },
+        )
+    }
 
     val multiFilePicker =
         rememberExternalActivityLauncher(
@@ -242,6 +263,26 @@ fun AddPasswordScreen(
                 attachmentPaths = attachmentPaths + newPaths
             }
         }
+
+    // Below Android 13 the androidx photo-picker contracts fall back to the Play-services photo
+    // picker, which shows a "downloading Google Play services" dialog on devices without that
+    // module (reproduced on Android 10). Use the document picker there instead, which is the same
+    // UI the "文件管理器" option already opens.
+    val systemPhotoPicker = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    val launchAvatarGallery: () -> Unit = {
+        if (systemPhotoPicker) {
+            avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        } else {
+            filePicker.launch("image/*")
+        }
+    }
+    val launchAttachmentGallery: () -> Unit = {
+        if (systemPhotoPicker) {
+            multiImagePicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        } else {
+            multiFilePicker.launch("image/*")
+        }
+    }
 
     if (showDiscard) {
         AlertDialog(
@@ -284,7 +325,9 @@ fun AddPasswordScreen(
         TitleAvatarSection(
             title = title,
             avatarImagePath = avatarImagePath,
-            onEditAvatarClick = { showAvatarPickerDialog = true },
+            onEditAvatarClick = {
+                if (loaded && !saving && !faviconLoading) showAvatarPickerDialog = true
+            },
         )
 
         if (showAvatarPickerDialog) {
@@ -296,7 +339,7 @@ fun AddPasswordScreen(
                     TextButton(
                         onClick = {
                             showAvatarPickerDialog = false
-                            avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+                            launchAvatarGallery()
                         }
                     ) {
                         Text("相册")
@@ -319,11 +362,19 @@ fun AddPasswordScreen(
             value = title,
             onValueChange = {
                 title = it
+                titleMissing = false
                 errorMessage = null
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().bringIntoViewRequester(titleBringIntoView),
             label = { Text(stringResource(R.string.field_title)) },
             singleLine = true,
+            isError = titleMissing,
+            supportingText =
+                if (titleMissing) {
+                    { Text(stringResource(R.string.error_title_required)) }
+                } else {
+                    null
+                },
         )
         OutlinedTextField(
             enabled = loaded && !saving,
@@ -482,11 +533,19 @@ fun AddPasswordScreen(
             value = confirmPassword,
             onValueChange = {
                 confirmPassword = it
+                confirmMismatch = false
                 errorMessage = null
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().bringIntoViewRequester(confirmBringIntoView),
             label = { Text(stringResource(R.string.field_confirm_password)) },
             singleLine = true,
+            isError = confirmMismatch,
+            supportingText =
+                if (confirmMismatch) {
+                    { Text(stringResource(R.string.error_password_confirm_mismatch)) }
+                } else {
+                    null
+                },
             visualTransformation =
                 if (confirmPasswordVisible) {
                     VisualTransformation.None
@@ -574,9 +633,7 @@ fun AddPasswordScreen(
                     TextButton(
                         onClick = {
                             showAttachmentPickerDialog = false
-                            multiImagePicker.launch(
-                                PickVisualMediaRequest(PickVisualMedia.ImageOnly)
-                            )
+                            launchAttachmentGallery()
                         }
                     ) {
                         Text("相册")

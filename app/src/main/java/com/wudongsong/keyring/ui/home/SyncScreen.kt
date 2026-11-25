@@ -1006,7 +1006,7 @@ private fun SyncSectionTitle(title: String, hint: String) {
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
 private fun SyncConnectPreview() {
-    MyPasswordsTheme(dynamicColor = false) {
+    MyPasswordsTheme {
         SyncScreenContent(
             SyncViewState(
                 deviceName = "我的手机",
@@ -1020,7 +1020,7 @@ private fun SyncConnectPreview() {
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
 private fun SyncReceivePreview() {
-    MyPasswordsTheme(dynamicColor = false) {
+    MyPasswordsTheme {
         SyncScreenContent(
             SyncViewState(
                 deviceName = "我的手机",
@@ -1039,7 +1039,7 @@ private fun SyncReceivePreview() {
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
 private fun SyncDarkPreview() {
-    MyPasswordsTheme(darkTheme = true, dynamicColor = false) {
+    MyPasswordsTheme(darkTheme = true) {
         SyncScreenContent(SyncViewState(deviceName = "My phone", role = 1), SyncActions())
     }
 }
